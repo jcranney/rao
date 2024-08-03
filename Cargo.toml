@@ -2,8 +2,10 @@
 name = "rao"
 version = "0.1.0"
 edition = "2021"
+default-run = "rao"
 
 [dependencies]
+approx = "0.5.1"
 fitrs = "0.5.0"
 impl_ops = "0.1.1"
 rayon = "1.10.0"

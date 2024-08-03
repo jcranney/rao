@@ -1,248 +1,384 @@
+//! # rao
+//! 
+//! `rao` - Adaptive Optics tools in Rust - is a set of fast and robust adaptive
+//! optics utilities. The current scope of `rao` is for the calculation of
+//! large matrices in AO, used in the ocnfiguration of real-time adaptive optics,
+//! control. Specifically, we aim to provide fast, scalable, and reliable APIs for
+//! generating:
+//!  - `rao::IMat` - the interaction matrix between measurements and actuators,
+//!  - `rao::CovMat` - the covariance matrix between random variables (e.g., measurements)
+//!
+//! These two matrices are the largest computational burden in the configuration
+//! of real-time control for AO, and having fast and scalable methods for their
+//! computation enables the optimisation of the AO loop [citation needed].
+//!
+//! # Examples
+//! Building an interaction matrix for a square-grid DM and a square-grid SH-WFS:
+//! ```
+//! use crate::rao::Matrix;
+//! const N_SUBX: i32 = 8;  // 8 x 8 subapertures
+//! const PITCH: f64 = 0.2;  // 0.2 metres gap between actuators
+//! const COUPLING: f64 = 0.5;  // actuator cross-coupling
+//! 
+//! // build list of measurements
+//! let mut measurements = vec![];
+//! for i in 0..N_SUBX {
+//!     for j in 0..N_SUBX {
+//!         let x0 = ((j-N_SUBX/2) as f64 + 0.5)*PITCH;
+//!         let y0 = ((i-N_SUBX/2) as f64 + 0.5)*PITCH;
+//!         let xz = 0.0;  // angular x-component (radians)
+//!         let yz = 0.0;  // angular y-compenent (radians)
+//!         // define the optical axis of subaperture
+//!         let line = rao::Line::new(x0,xz,y0,yz);
+//!         // slope-style measurement
+//!         // x-slope
+//!         measurements.push(rao::Measurement::Slope{
+//!             line: line.clone(),
+//!              method: rao::SlopeMethod::TwoEdge{
+//!                 edge_separation: PITCH,
+//!                 edge_length: PITCH,
+//!                 npoints: 5,
+//!                 gradient_axis: rao::Vec2D::x_unit(),
+//!             }
+//!         });
+//!         // y-slope
+//!         measurements.push(rao::Measurement::Slope{
+//!             line: line.clone(),
+//!             method: rao::SlopeMethod::TwoEdge{
+//!                 edge_separation: PITCH,
+//!                 edge_length: PITCH,
+//!                 npoints: 5,
+//!                 gradient_axis: rao::Vec2D::y_unit(),
+//!             }
+//!         });
+//!     }
+//! }
+//! 
+//! // build list of actuators
+//! let mut actuators = vec![];
+//! for i in 0..(N_SUBX+1) {
+//!     for j in 0..(N_SUBX+1) {
+//!         let x = ((j-N_SUBX/2) as f64)*PITCH;
+//!         let y = ((i-N_SUBX/2) as f64)*PITCH;
+//!         actuators.push(
+//!             // Gaussian influence functions
+//!             rao::Actuator::Gaussian{
+//!                 // std defined by coupling and pitch
+//!                 sigma: rao::coupling_to_sigma(COUPLING, PITCH),
+//!                 // position of actuator in 3D (z=altitude)
+//!                 position: rao::Vec3D::new(x, y, 0.0),
+//!             }
+//!         );
+//!     }
+//! }
+//! 
+//! // instanciate imat from (actu,meas)
+//! let imat = rao::IMat::new(&measurements, &actuators);
+//! // serialise imat for saving
+//! let data: Vec<f64> = imat.flattened_array();
+//! ```
+
+
 use std::fmt;
-use rayon::prelude::*;
 #[macro_use] extern crate impl_ops;
-use std::ops;
 
 
-#[derive(Debug,Clone)]
-pub struct PlaneCoordinate {
-    x: f64,
-    y: f64,
-}
-impl PlaneCoordinate {
-    pub fn new(x: f64, y: f64) -> Self {
-        Self {x,y}
-    }
-    pub fn x_unit() -> Self {
-        Self {x:1.0, y:0.0}
-    }
-    pub fn y_unit() -> Self {
-        Self {x:0.0, y:0.0}
-    }
-    pub fn length(&self) -> f64 {
-        (self.x.powf(2.0)+self.y.powf(2.0)).powf(0.5)
-    }
-}
+mod utils;
+pub use crate::utils::*;
+mod geometry;
+pub use crate::geometry::{
+    Vec2D,
+    Vec3D,
+    Line,
+};
+mod linalg;
+pub use crate::linalg::Matrix;
 
-impl_op_ex!(+
-    |a:&PlaneCoordinate,b:&PlaneCoordinate| -> PlaneCoordinate
-    {
-        PlaneCoordinate {
-            x: a.x + b.x,
-            y: a.y + b.y,
-        }
-    }
-);
-impl_op_ex!(-
-    |a:&PlaneCoordinate,b:&PlaneCoordinate| -> PlaneCoordinate
-    {
-        PlaneCoordinate {
-            x: a.x - b.x,
-            y: a.y - b.y,
-        }
-    }
-);
-
-
-
-#[derive(Debug,Clone)]
-pub struct ElementCoordinate {
-    x: f64,  // position in metres relative to optical axis
-    y: f64,  // position in metres relative to optical axis
-    z: f64,  // conjugation altitude (0km == Pupil, +infty == Object)
-}
-
-impl ElementCoordinate {
-    pub fn new(x: f64, y: f64, z: f64) -> Self {
-        Self {x,y,z}
-    }
-    pub fn origin() -> Self {
-        Self {x:0.0, y:0.0, z: 0.0}
-    }
-    pub fn distance_at_altitude(&self, line: &Line) -> f64 {
-        let line_intersection = line.position_at_altitude(self.z);
-        let dist = (line_intersection.x - self.x).powf(2.0)
-                  +(line_intersection.y - self.y).powf(2.0);
-        dist.powf(0.5)
-    }
-    pub fn displacement_at_altitude(&self, line: &Line) -> PlaneCoordinate {
-        let line_intersection = line.position_at_altitude(self.z);
-        PlaneCoordinate{
-            x: (line_intersection.x - self.x),
-            y: (line_intersection.y - self.y),
-        }
-    }
-}
-
-impl_op_ex_commutative!(+
-    |a:&ElementCoordinate,b:&PlaneCoordinate| -> ElementCoordinate
-    {
-        ElementCoordinate {x:a.x+b.x,y:a.y+b.y,z:a.z}
-    }
-);
-impl_op_ex_commutative!(+
-    |a:&Line,b:&PlaneCoordinate| -> Line
-    {
-        match a {
-            Line::OpticalAxis => Line::Parametric{
-                x0: b.x,
-                xz: 0.0,
-                y0: b.y,
-                yz: 0.0,
-            },
-            Line::TwoPoint(coorda,coordb) => Line::TwoPoint(
-                ElementCoordinate{
-                    x: coorda.x + b.x,
-                    y: coorda.y + b.y,
-                    z: coorda.z,
-                },
-                ElementCoordinate{
-                    x: coordb.x + b.x,
-                    y: coordb.y + b.y,
-                    z: coordb.z,
-                }
-            ),
-            Line::Parametric{x0,xz,y0,yz} => Line::Parametric{
-                x0: x0+b.x,
-                xz: *xz,
-                y0: y0+b.y,
-                yz: *yz,
-            },
-        }
-    }
-);
-
-
-
+/// The atomic measurement unit.
+/// 
+/// A [Measurement] provides a scalar-valued sample of the system. Similar to an
+/// [Actuator], a single measurement device (e.g., a Shack Hartmann WFS) might be
+/// comprised of many [Measurement]s, e.g., `&[Measurement; N]`.
 #[derive(Debug)]
-pub enum Line {
-    OpticalAxis,
-    TwoPoint(ElementCoordinate, ElementCoordinate),
-    Parametric { // where z = z, x = x0+xz*z, y = y0+yz*z
-        x0: f64,
-        xz: f64,
-        y0: f64,
-        yz: f64,
-    }
+pub enum Measurement{
+    /// The null measurement, always returning 0.0 regardless of the measured object.
+    Zero,
+    /// Phase measurement along a given [Line].
+    Phase {
+        /// [Line] to trace measurement through.
+        line: Line,
+    },
+    /// Slope measurement along a given [Line], using a particular [SlopeMethod].
+    Slope {
+        /// [Line] to trace measurement through, though depending on the slope method,
+        /// the slope may be calculated using regions "near" the Line.
+        line: Line,
+        /// [SlopeMethod] used to measure slope.
+        method: SlopeMethod,
+    },
 }
 
-impl Line {
-    fn position_at_altitude(&self, alt: f64) -> PlaneCoordinate {
-        match self {
-            Self::OpticalAxis => PlaneCoordinate{x:0.0, y:0.0},
-            Self::TwoPoint(a,b) => {
-                let t = (alt-a.z)/(b.z - a.z);
-                let x = a.x + t*(b.x - a.x);
-                let y = a.y + t*(b.y - a.y);
-                PlaneCoordinate{x, y}
-            },
-            Self::Parametric{x0,xz,y0,yz} => {
-                PlaneCoordinate {
-                    x: alt*xz + x0,
-                    y: alt*yz + y0,
-                }
-            },
-        }
-    }
+/// Variants allowing different methods of slope computation.
+#[derive(Debug)]
+pub enum SlopeMethod {
+    /// Directly samples the gradient of the influence function along a [Line], uses
+    /// analytical gradient of influence functions.
+    Axial {
+        /// Axis of gradient vector to sample, e.g., x-slope -> `Vec2D::new(1.0, 0.0)`
+        gradient_axis: Vec2D,
+    },
+    /// Measure the average slope over the interval connecting two points.
+    TwoPoint {
+        /// *Negative* end of the interval
+        neg: Vec2D,
+        /// *Positive* end of the interval
+        pos: Vec2D,
+    },
+    /// Approximate the average slope over a region defined by two edges of a rectangle.
+    /// The edges are defined by their length, their separation, and the axis along which
+    /// they are separated (the *gradient axis*).
+    TwoEdge {
+        /// Length of edges (e.g., subaperture height for x-slope measurement)
+        edge_length: f64,
+        /// Separation of edges (e.g., subaperture width for x-slope measurement)
+        edge_separation: f64,
+        /// Axis of gradient vector to sample, e.g., x-slope -> `Vec2D::new(1.0, 0.0)`
+        gradient_axis: Vec2D,
+        /// Number of points to sample along each edge (more points is more accurate but more demanding).
+        npoints: u32,
+    },
 }
 
+/// The atomic actuation unit.
+/// 
+/// An [Actuator]'s state is defined by a scalar value, so a device with `N`
+/// actuatable degrees of freedom is considered as `N` different [Actuator]s,
+/// e.g., `&[Actuator; N]`.
 #[derive(Debug)]
 pub enum Actuator{
+    /// A null actuator, making zero impact on any `Measurement`
     Zero,
+    /// A circularly symmetric Gaussian actuator, centred at `position` with
+    /// a specified scalar `sigma`. See [gaussian2d] for more info.
     Gaussian {
-        coupling: f64,  // coupling per metre, not traditional coupling per pitch
-        position: ElementCoordinate,
+        /// sigma of gaussian function in metres. 
+        sigma: f64,
+        /// position of actuator in 3d space, z=altitude.
+        position: Vec3D,
     }
 }
 
 impl Actuator {
-    fn phase(&self, line: &Line) -> f64 {
+    /// Given a [Line], find the value of the [Actuator]'s influence function
+    /// when it is traced by that line.
+    pub fn phase(&self, line: &Line) -> f64 {
         match self {
             Self::Zero => 0.0,
             Self::Gaussian {
-                coupling,
                 position,
+                sigma,
             } => {
                 let distance = position.distance_at_altitude(line);
-                Self::gaussian(distance, (coupling).ln())
+                gaussian(distance / sigma)
             }
         }
     }
-    fn slope(&self, line: &Line, method: &SlopeMethod) -> f64 {
+    /// Given a [Line] and a slope computation method ([SlopeMethod]), find the
+    /// slope of the influence function along that line.
+    pub fn slope(&self, line: &Line, method: &SlopeMethod) -> f64 {
         match self {
             Self::Zero => 0.0,
             Self::Gaussian {
-                coupling,
+                sigma,
                 position,
             } => {
                 match method {
                     SlopeMethod::Axial{gradient_axis} => {
                         let displacement = position.displacement_at_altitude(line);
-                        let c = coupling.ln();
-                        let fxy = Self::gaussian2d(displacement.x, displacement.y, c);
-                        2.0*fxy*c*(displacement.x*gradient_axis.x + displacement.y*gradient_axis.y)        
+                        let fxy = gaussian2d(&displacement*(1.0/sigma));
+                        -fxy*(displacement.dot(gradient_axis))/sigma.powf(2.0)/gradient_axis.norm()
                     },
                     SlopeMethod::TwoPoint{neg, pos} => {
-                        let c = coupling.ln();
                         let distance_neg = (position).distance_at_altitude(&(line+neg));
-                        let f_neg = Self::gaussian(distance_neg, c);
+                        let f_neg = gaussian(distance_neg/sigma);
                         let distance_pos = (position).distance_at_altitude(&(line+pos));
-                        let f_pos = Self::gaussian(distance_pos, c);
-                        (f_pos - f_neg)/(pos-neg).length()
+                        let f_pos = gaussian(distance_pos/sigma);
+                        (f_pos - f_neg)/(pos-neg).norm()
                     },
-                    _ => todo!(),
+                    SlopeMethod::TwoEdge{edge_length, edge_separation, gradient_axis, npoints} => {
+                        // the idea here is to take npoints along each of the two edges
+                        // and find the average of the "point-wise" slopes along these
+                        // edges.
+                        //
+                        // First, we build the points around the origin, then we effset them
+                        // to the positive and negative sides of the "subaperture".
+                        if *npoints == 0 {
+                            return 0.0;
+                        }
+                        let point_a =  edge_length * 0.5 * gradient_axis.ortho();
+                        let point_b = -point_a.clone();
+                        let points = Vec2D::linspace(&point_a, &point_b, *npoints);
+                        
+                        let points_pos: Vec<Vec2D> = points
+                        .clone()
+                        .into_iter()
+                        .map(|p| p + gradient_axis * edge_separation * 0.5)
+                        .collect();
+                        let points_neg: Vec<Vec2D> = points
+                        .clone()
+                        .into_iter()
+                        .map(|p| p - gradient_axis * edge_separation * 0.5)
+                        .collect();
+                        let mut slopes: Vec<f64> = vec![];
+                        for i in 0..points_pos.len() {
+                            slopes.push(self.slope(line, &SlopeMethod::TwoPoint{
+                                neg: points_neg[i].clone(),
+                                pos: points_pos[i].clone(),
+                            }));
+                        }
+                        slopes.into_iter().sum::<f64>() / *npoints as f64
+                    },
                 }
             }
         }
     }
-    fn gaussian(x: f64, a: f64) -> f64 {
-        (a*(x).powf(2.0)).exp()
-    }
-    fn gaussian2d(x: f64, y: f64, a: f64) -> f64 {
-        (a*(x.powf(2.0)+y.powf(2.0))).exp()
-    }
 }
 
-
+/// Interaction Matrix between measurements and actuators.
+/// 
+/// The interaction matrix ([IMat]) is the interface between measurements and
+/// actuators. Specifically, the [IMat] has elements which are equal to the
+/// response of each [Measurement] to a unit input from each [Actuator].
+/// # Examples
+/// Let's assume we have:
+///  - Two [Actuator]s, with Gaussian influence functions, located at `(x, y)`:
+///    - `(+1.0, 0.0)` metres, and
+///    - `(-1.0, 0.0)` metres, 
+///
+///    on a deformable mirror conjugated to 10 km in altitude, and with a coupling
+///    of 0.4 at pitch of 2.0 metres.
+///  - Three [Measurement]s, measuring the y-slope on-axis, at projected pupil
+///    positions of `(x, y)`:
+///    - `(-1.0, -1.0)`
+///    - `( 0.0,  0.0)`
+///    - `(+1.0, +1.0)`
+/// We first construct those measurements and actuators, then build an imat from
+/// them, and print the elements of that imat:
+/// ```
+/// const PITCH: f64 = 2.0;  // metres
+/// const ALTITUDE: f64 = 10_000.0;  // metres
+/// const ACTU_POS: [[f64;2];2] = [
+///     [-1.0, 0.0],  // [x1,y1]
+///     [ 1.0, 0.0],  // [x2,y2]
+/// ];
+/// const MEAS_POS: [[f64;2];3] = [  // metres
+///     [-1.0, -1.0],  // [x1,y1]
+///     [ 0.0,  0.0],  // [x2,y2]
+///     [ 1.0,  1.0],  // [x3,y3]
+/// ];
+///
+/// const COUPLING: f64 = 0.4; // dimensionless
+/// let sigma = rao::coupling_to_sigma(COUPLING, PITCH);
+/// let actuators = ACTU_POS.map(|[x,y]|
+///     rao::Actuator::Gaussian {
+///         sigma: sigma,
+///         position: rao::Vec3D::new(x, y, ALTITUDE),
+///     }
+/// );
+/// let measurements = MEAS_POS.map(|[x,y]|
+///     rao::Measurement::Slope {
+///         line: rao::Line::new_on_axis(x, y),
+///         method: rao::SlopeMethod::Axial {
+///             gradient_axis: rao::Vec2D::y_unit(),
+///         }
+///     }
+/// );
+/// 
+/// let imat = rao::IMat::new(&measurements, &actuators);
+/// println!("{}", imat);
+/// ```
+/// which will print something similar to:
+/// ```txt
+/// [[  0.36  0.15 ]
+///  [ -0.00 -0.00 ]
+///  [ -0.15 -0.36 ]]
+/// ```
+/// # Notes on units
+/// In Adaptive Optics, there is little/no standardisation of units for measurements
+/// and actuators, but some units are seen more often than others. For example, we
+/// often see:
+///  - microns, metres, radians, or waves for phase measurement units,
+///  - arcsec, radians, or dimensionless units for slope measurement units,
+///  - microns, metres, waves, arcseconds (e.g., for tip-tilt mirrors), or volts
+///    for actuator units.
+///
+/// This is a common point of confusion, particularly for AO newcomers. In fact,
+/// if we are operating under the paraxial regime, and we only consider linear interaction
+/// functions (i.e., those that are well captured by an *Interaction Matrix*), then
+/// we can safely refuse to define any particular units during the construction of an
+/// interaction matrix. To demonstrate, consider the above example. The units of the
+/// slopes are in *influence function units* per *distance units*. The influence
+/// function in this case is Gaussian, and is parameterised only by its standard
+/// deviation, `sigma`, which is in the same lineal distance units as the various
+/// coordinates we defined. In the example above, we denotes those units as metres,
+/// but if one assumed different distance units, the resulting interaction matrix
+/// would be identical. Let's say that I use the units of
+/// [furlongs](https://en.wikipedia.org/wiki/Furlong) (1 furlong ==  201.1680 metres).
+/// Then I would have measured my AO system to have the geometry:
+/// ```
+/// const PITCH: f64 = 9.941e-3;  // furlongs
+/// const ALTITUDE: f64 = 49.71;  // furlongs
+/// const ACTU_POS: [[f64;2];2] = [
+///     [-4.971e-3, 0.0],  // [x1,y1]
+///     [ 4.971e-3, 0.0],  // [x2,y2]
+/// ];
+/// const MEAS_POS: [[f64;2];3] = [  // furlongs
+///     [-4.971e-3, -4.971e-3],
+///     [ 0.0,  0.0],
+///     [ 4.971e-3,  4.971e-3],
+/// ];
+/// ```
+/// Replacing the variables in the example above with these ones, I would get my
+/// interaction matrix and would be confident that the units of the interaction
+/// matrix are "influence function units per furlong per actuator unit"
+/// ```txt
+/// [[ 73.31 29.32 ]
+///  [ -0.00 -0.00 ]
+///  [ -29.32 -73.31 ]]
+/// ```
+/// Note that this is exactly the same interaction matrix as before, but scaled by
+/// a factor of 201.1680 (metres per furlong).
+/// The way to read this is, for example, the gradient of the first influence 
+/// function when traced along the first measurement axis is 73.31 units per furlong,
+/// or indeed, per YOUR_UNITS where you assumed those units in the definition of
+/// the system. The point is, if you are consistent with your inputs, then you can 
+/// use any units and the output will comply.
+/// 
+/// At present, the only influence function available is the Gaussian one, but this
+/// "unit agnosticism" is so attractive that it might as well set the convention for
+/// this crate: *where possible, avoid assuming/defining/requiring units*.
 #[derive(Debug)]
-pub enum SlopeMethod {
-    Axial {
-        gradient_axis: PlaneCoordinate,
-    },
-    TwoPoint {
-        neg: PlaneCoordinate,
-        pos: PlaneCoordinate,
-    },
-    TwoEdges,
-    Area,
-}
-
-#[derive(Debug)]
-pub enum Measurement{
-    Zero,
-    Phase {
-        line: Line,
-    },
-    Slope {
-        line: Line,
-        method: SlopeMethod,
-    },
-}
-
-#[derive(Debug)]
-pub struct Imat<'a> {
+pub struct IMat<'a> {
+    /// slice of actuators defining this interaction matrix
     actuators: &'a [Actuator],
+    /// slice of measurements defining this interaction matrix
     measurements: &'a [Measurement],
 }
 
-impl<'a> Imat<'a>{
-    pub fn new(actuators: &'a [Actuator], measurements: &'a [Measurement]) -> Self {
-        Imat {
-            actuators,
+impl<'a> IMat<'a>{
+    /// Define a new [IMat] with measurements and actuators. Note that this function
+    /// is as *lazy* as possible, and the actual computation of the interaction matrix
+    /// only happens when the elements of that matrix are requested.
+    pub fn new(measurements: &'a [Measurement], actuators: &'a [Actuator]) -> Self {
+        IMat {
             measurements,
+            actuators,
         }
     }
-    pub fn element(&self, actu_idx: usize, meas_idx: usize) -> f64 {
+}
+
+impl Matrix for IMat<'_> {
+    fn eval(&self, meas_idx: usize, actu_idx: usize) -> f64 {
         let actuator: &Actuator = &self.actuators[actu_idx];
         let measurement: &Measurement = &self.measurements[meas_idx];
         match (actuator, measurement) {
@@ -254,204 +390,190 @@ impl<'a> Imat<'a>{
             }
         }
     }
-    pub fn flatarray(&self) -> Vec<f64> {
-        let results = (0..self.actuators.len())
-        .into_par_iter()
-        .map(|actu_idx|
-            (0..self.measurements.len())
-            .into_iter()
-            .map(|meas_idx| 
-                self.element(actu_idx, meas_idx)
-            ).collect::<Vec<f64>>()
-        )
-        .flatten()
-        .collect();
-        results
+    fn nrows(&self) -> usize {
+        self.measurements.len() as usize
+    }
+    fn ncols(&self) -> usize {
+        self.actuators.len() as usize
     }
 }
 
-impl fmt::Display for Imat<'_> {
+impl fmt::Display for IMat<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        for actu_idx in 0..self.actuators.len() {
-            match actu_idx {
-                0 => write!(f, "[[")?,
-                _ => write!(f, "\n [")?,
-            }    
-            for meas_idx in 0..self.measurements.len() {
-                write!(f, " {:5.2}", self.element(actu_idx, meas_idx))?;
-            }
-            write!(f, " ]")?;
-        }
-        write!(f, "]")?;
-        Ok(())
+        self.format(f)
     }
+}
+
+
+#[derive(Debug)]
+pub struct CovMat<'a> {
+    measurements_left: &'a [Measurement],
+    measurements_right: &'a [Measurement],
 }
 
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use approx::{assert_abs_diff_eq};
     
-    #[test]
-    fn always_pass() {
-        assert!(true);
-    }
-
     #[test]
     fn gaussian_on_axis_phase() {
         let actuators = [
             Actuator::Gaussian{
-                coupling: 0.5,
-                position: ElementCoordinate::new(0.0, 0.0, 0.0),
+                sigma: coupling_to_sigma(0.5,1.0),
+                position: Vec3D::new(0.0, 0.0, 0.0),
             }
         ];
         let measurements = [
             Measurement::Phase{
-                line: Line::OpticalAxis
+                line: Line::new_on_axis(0.0, 0.0)
             }
         ];
-        let imat = Imat::new(&actuators, &measurements);
-        assert_eq!(imat.element(0,0), 1.0);
+        let imat = IMat::new(&measurements, &actuators);
+        assert_abs_diff_eq!(imat.eval(0,0), 1.0, epsilon = f64::EPSILON);
     }
 
     #[test]
     fn gaussian_off_axis_phase() {
         let actuators = [
             Actuator::Gaussian{
-                coupling: 0.5,
-                position: ElementCoordinate::new(0.0, 0.0, 1000.0),
+                sigma: coupling_to_sigma(0.5,1.0),
+                position: Vec3D::new(0.0, 0.0, 1000.0),
             }
         ];
         let measurements = [
             Measurement::Phase{
-                line: Line::Parametric {
-                    x0: 0.0,
-                    xz: 1.0/1000.0,
-                    y0: 0.0,
-                    yz: 0.0,
-                }
+                line: Line::new(0.0, 1.0/1000.0, 0.0, 0.0)
             }
         ];
-        let imat = Imat::new(&actuators, &measurements);
-        assert_eq!(imat.element(0,0), 0.5);
+        let imat = IMat::new(&measurements, &actuators);
+        assert_abs_diff_eq!(imat.eval(0,0), 0.5, epsilon = f64::EPSILON);
     }
 
     #[test]
     fn gaussian_off_axis_phase_twopoint() {
         let actuators = [
             Actuator::Gaussian{
-                coupling: 0.5,
-                position: ElementCoordinate::new(0.0, 0.0, 1000.0),
+                sigma: coupling_to_sigma(0.5,1.0),
+                position: Vec3D::new(0.0, 0.0, 1000.0),
             }
         ];
         let measurements = [
             Measurement::Phase{
-                line: Line::TwoPoint(
-                    ElementCoordinate::new(1.0,1.0,0.0),
-                    ElementCoordinate::new(1.0,-1.0,2000.0),
+                line: Line::new_from_two_points(
+                    &Vec3D::new(1.0,1.0,0.0),
+                    &Vec3D::new(1.0,-1.0,2000.0),
                 )
             }
         ];
-        let imat = Imat::new(&actuators, &measurements);
-        assert_eq!(imat.element(0,0), 0.5);
+        let imat = IMat::new(&measurements, &actuators);
+        assert_abs_diff_eq!(imat.eval(0,0), 0.5);
     }
 
     #[test]
     fn simple_symmetric() {
         let actuators = [
             Actuator::Gaussian{
-                coupling: 0.5,
-                position: ElementCoordinate::new(0.0, 0.0, 1000.0),
+                sigma: coupling_to_sigma(0.5,1.0),
+                position: Vec3D::new(0.0, 0.0, 1000.0),
             },
             Actuator::Gaussian{
-                coupling: 0.5,
-                position: ElementCoordinate::new(1.0, 0.0, 1000.0),
+                sigma: coupling_to_sigma(0.5,1.0),
+                position: Vec3D::new(1.0, 0.0, 1000.0),
             },
         ];
         let measurements = [
             Measurement::Phase{
-                line: Line::Parametric {
-                    x0: 0.0,
-                    y0: 0.0,
-                    xz: 0.0,
-                    yz: 0.0,
-                }
+                line: Line::new_on_axis(0.0, 0.0),
             },
             Measurement::Phase{
-                line: Line::Parametric {
-                    x0: 1.0,
-                    y0: 0.0,
-                    xz: 0.0,
-                    yz: 0.0,
-                }
+                line: Line::new(1.0, 0.0, 0.0, 0.0),
             }
         ];
-        let imat = Imat::new(&actuators, &measurements);
-        assert!(imat.element(0,0)>0.0);
-        assert_eq!(imat.element(0,0),imat.element(1,1));
-        assert_eq!(imat.element(1,0),imat.element(0,1));
+        let imat = IMat::new(&measurements, &actuators);
+        assert!(imat.eval(0,0)>0.0);
+        assert_abs_diff_eq!(imat.eval(0,0),imat.eval(1,1));
+        assert_abs_diff_eq!(imat.eval(1,0),imat.eval(0,1));
     }
 
     #[test]
     fn slope_axial() {
         let actuators = [
             Actuator::Gaussian{
-                coupling: 0.5,
-                position: ElementCoordinate::origin(),
+                sigma: coupling_to_sigma(0.5,1.0),
+                position: Vec3D::origin(),
             }
         ];
         let measurements = [0.0,0.5,1.0,1.5,2.0].map(|x|
             Measurement::Slope{
-                line: Line::Parametric{
-                    x0: x,
-                    xz: 0.0,
-                    y0: 0.0,
-                    yz: 0.0,
-                },
+                line: Line::new(x, 0.0, 0.0, 0.0),
                 method: SlopeMethod::Axial{
-                    gradient_axis: PlaneCoordinate::x_unit(),
+                    gradient_axis: Vec2D::new(1.0,0.0),
                 },
             }
         );
-        let imat = Imat::new(&actuators, &measurements);
-        println!("{}",imat);
-        // if we assume the influence function is 0.5^(x^2), then the
-        // gradient at x=1 should be ln(0.5) ~= -0.69314718...
-        assert_eq!(imat.element(0,2),(0.5_f64).ln());
+        let imat = IMat::new(&measurements, &actuators);
+        assert_abs_diff_eq!(imat.eval(2,0), (0.5_f64).ln(), epsilon=f64::EPSILON);
     }
 
     #[test]
     fn slope_twopoint() {
         let actuators = [
             Actuator::Gaussian{
-                coupling: 0.5,
-                position: ElementCoordinate::origin(),
+                sigma: coupling_to_sigma(0.5,1.0),
+                position: Vec3D::origin(),
             }
         ];
-        let measurements = [0.0,0.5,1.0,1.5,2.0].map(|x|
+        let measurements = [
             Measurement::Slope{
-                line: Line::Parametric{
-                    x0: x,
-                    xz: 0.0,
-                    y0: 0.0,
-                    yz: 0.0,
-                },
+                line: Line::new(1.0, 0.0, 0.0, 0.0),
                 method: SlopeMethod::TwoPoint{
-                    neg: PlaneCoordinate{
-                        x: -1e-4,
-                        y: 0.0,
-                    },
-                    pos: PlaneCoordinate{
-                        x: 1e-4,
-                        y: 0.0,
-                    }
+                    neg: Vec2D::new(-1e-6, 0.0),
+                    pos: Vec2D::new(1e-6, 0.0)
+                }
+            },
+            Measurement::Slope{
+                line: Line::new(1.0, 0.0, 0.0, 0.0),
+                method: SlopeMethod::Axial{
+                    gradient_axis: Vec2D::new(1.0,0.0),
+                },
+            }
+        ];
+        let imat = IMat::new(&measurements, &actuators);
+        assert_abs_diff_eq!(imat.eval(0,0),imat.eval(1,0),epsilon=1e-8);
+    }
+
+
+    #[test]
+    fn slope_twoedge() {
+        let actuators = [
+            Actuator::Gaussian{
+                sigma: coupling_to_sigma(0.5,1.0),
+                position: Vec3D::origin(),
+            }
+        ];
+
+        let line = Line::new(1.0, 0.0, 0.0, 0.0);
+        let measurements = [
+            Measurement::Slope{
+                line: line.clone(),
+                method: SlopeMethod::TwoPoint{
+                    neg: Vec2D::new(-1e-2, 0.0),
+                    pos: Vec2D::new(1e-2, 0.0),
+                }
+            },
+            Measurement::Slope{
+                line: line,
+                method: SlopeMethod::TwoEdge{
+                    edge_length: 0.0,
+                    edge_separation: 2e-2,
+                    gradient_axis: Vec2D::x_unit(),
+                    npoints: 10
                 }
             }
-        );
-        let imat = Imat::new(&actuators, &measurements);
-        println!("{}",imat);
-        // if we assume the influence function is 0.5^(x^2), then the
-        // gradient at x=1 should be ln(0.5) ~= -0.69314718...
-        assert!((imat.element(0,2)-(0.5_f64).ln()).abs() < 1e-7);
+        ];
+        let imat = IMat::new(&measurements, &actuators);
+        assert_abs_diff_eq!(imat.eval(0,0),imat.eval(1,0));
     }
 }
