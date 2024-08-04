@@ -428,6 +428,12 @@ impl fmt::Display for IMat<'_> {
     }
 }
 
+impl<T: CoSampleable> fmt::Display for CovMat<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        self.format(f)
+    }
+}
+
 struct VonKarmanLayer {
     r0: f64,
     l0: f64,
@@ -439,17 +445,19 @@ impl CoSampleable for VonKarmanLayer {
     fn eval(&self, linea: &Line, lineb:&Line) -> f64 {
         let p1 = linea.position_at_altitude(self.alt);
         let p2 = lineb.position_at_altitude(self.alt);
-        vk_cov((p1-p2).norm())
+        vk_cov((p1-p2).norm(), self.r0, self.l0)
     }
 }
 
 #[derive(Debug)]
-pub struct CovMat<'a> {
+pub struct CovMat<'a, T: CoSampleable>
+{
     measurements_left: &'a [Measurement],
     measurements_right: &'a [Measurement],
+    cov_model: &'a T,
 }
 
-impl Matrix for CovMat<'_> {
+impl<T: CoSampleable> Matrix for CovMat<'_, T> {
     fn nrows(&self) -> usize {
         self.measurements_left.len()
     }
@@ -466,8 +474,7 @@ impl Matrix for CovMat<'_> {
                 Measurement::Phase{line: line_left},
                 Measurement::Phase{line: line_right},
             ) => {
-                todo!();
-                //cov_phase_to_phase(line_left, line_right)
+                self.cov_model.eval(&line_left, &line_right)
             },
             (
                 Measurement::Slope{..},
@@ -730,4 +737,40 @@ mod tests {
         assert_abs_diff_eq!(imat.eval(0,0), 2.0, epsilon = f64::EPSILON);
     }
 
+    #[test]
+    fn test_vkcov() {
+        let vk = VonKarmanLayer {
+            r0: 0.1,
+            l0: 25.0,
+            wind: Vec2D::new(10.0,0.0),
+            alt: 1000.0,
+        };
+        let line = Line::new_on_axis(0.0,0.0);
+        let a = vk.eval(&line, &line);
+        assert_abs_diff_eq!(a,vk_cov(0.0, vk.r0, vk.l0));
+        assert_abs_diff_eq!(a,856.3466131373517,epsilon=1e-3);
+    }
+
+    #[test]
+    fn test_vkcovmat() {
+        let vk = VonKarmanLayer {
+            r0: 0.1,
+            l0: 25.0,
+            wind: Vec2D::new(10.0,0.0),
+            alt: 1000.0,
+        };
+        let measurements: Vec<Measurement> = (0..10000)
+        .map(|i| i as f64/100.0)
+        .map(|x|
+            Measurement::Phase{
+                line: Line::new_on_axis(x, 0.0)
+            }
+        ).collect();
+        let covmat = CovMat{
+            measurements_left: &measurements,
+            measurements_right: &measurements,
+            cov_model: &vk
+        };
+        let a = covmat.flattened_array();
+    }
 }

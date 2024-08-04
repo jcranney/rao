@@ -72,6 +72,8 @@ mod vkcov {
     const NU: f64 = 5.0/6.0;
     const GAMMA_P11_6: f64 = 0.9406531400494903; //basic::gamma(5.0/6.0+1.0);
     const GAMMA_N11_6: f64 = 5.5663153388283035; //basic::gamma(5.0/6.0-1.0);
+    const FRONT_TERM: f64 = 0.08583068106228546;
+
 
     fn i_nu_real_n(z: f64) -> f64 {
         const NU: f64 = -5.0/6.0;
@@ -149,11 +151,11 @@ mod vkcov {
 
     pub const FIVESIXTHS: f64 = 5.0/6.0;
     
-    pub fn vk_cov(x: f64) -> f64 {
+    pub fn vk_cov(x: f64, r0: f64, l0: f64) -> f64 {
         // computes the rightmost two terms of Eqn (2.24)
-        let x_safe = x + 1e-7;
+        let x_safe = (x + 1e-9) * (2.0 * PI / l0);
         let y = k_real(x_safe);
-        y * x_safe.powf(FIVESIXTHS)
+        (l0 / r0).powf(5.0/3.0) * FRONT_TERM * y * x_safe.powf(FIVESIXTHS)
     }
 }
 
