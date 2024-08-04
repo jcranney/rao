@@ -59,3 +59,102 @@ mod tests {
         assert_abs_diff_eq!(gaussian(x),gaussian2d(Vec2D::new(x,y)));
     }
 }
+
+mod vkcov {
+    use std::f64::consts::{     // Using std lib constants
+        PI,                     // Pi
+        FRAC_PI_2               // Pi / 2
+    };
+
+    /// # Precision limit for Bessel computation
+    const PRECISION_CONVERGENCE: f64 = 1.0e-8;
+    const MAX_ITER_BESSEL: i32 = 500;
+    const NU: f64 = 5.0/6.0;
+    const GAMMA_P11_6: f64 = 0.9406531400494903; //basic::gamma(5.0/6.0+1.0);
+    const GAMMA_N11_6: f64 = 5.5663153388283035; //basic::gamma(5.0/6.0-1.0);
+
+    fn i_nu_real_n(z: f64) -> f64 {
+        const NU: f64 = -5.0/6.0;
+        let z2: f64 = z / 2.0;                                // Halving z
+        let mut k: f64 = 0.0;                                       // Order counter
+        let mut d1: f64 = 1.0;                                      // First div
+        let mut d2: f64 = GAMMA_N11_6; // basic::gamma(nu + 1.0);                   // Second div
+        let mut term: f64 = z2.powf(NU) / d2;                 // The term at each step
+        let mut sum: f64 = 0.0;              // The result of the operation
+        let mut counter: i32 = 0;                                   // Iteration counter
+        
+        // If the first term is already too small we exit directly
+        if term.abs() < PRECISION_CONVERGENCE {
+            return sum;
+        }
+
+        // Computing the terms of the infinite series
+        'convergence: while counter < MAX_ITER_BESSEL {
+            
+            counter += 1;
+            sum += term;
+
+            // If the changed compared to the final value is small we break
+            if (term / sum).abs() < PRECISION_CONVERGENCE {
+                break 'convergence;
+            }
+
+            k += 1.0;                                               // Incrementing value
+            d1 *= k;                                                // Next value in the n! term
+            d2 *= NU + k;                                           // Next value in the gamma(n+k+1) term
+            term = z2.powf(k.mul_add(2.0, NU)) / (d1 * d2);
+        }
+
+        sum
+    }
+
+    fn i_nu_real_p(z: f64) -> f64 {
+        const NU: f64 = 5.0/6.0;
+        let z2: f64 = z / 2.0;                                // Halving z
+        let mut k: f64 = 0.0;                                       // Order counter
+        let mut d1: f64 = 1.0;                                      // First div
+        let mut d2: f64 = GAMMA_P11_6; // basic::gamma(nu + 1.0);                   // Second div
+        let mut term: f64 = z2.powf(NU) / d2;                 // The term at each step
+        let mut sum: f64 = 0.0;              // The result of the operation
+        let mut counter: i32 = 0;                                   // Iteration counter
+        
+        // If the first term is already too small we exit directly
+        if term.abs() < PRECISION_CONVERGENCE {
+            return sum;
+        }
+
+        // Computing the terms of the infinite series
+        'convergence: while counter < MAX_ITER_BESSEL {
+            
+            counter += 1;
+            sum += term;
+
+            // If the changed compared to the final value is small we break
+            if (term / sum).abs() < PRECISION_CONVERGENCE {
+                break 'convergence;
+            }
+
+            k += 1.0;                                               // Incrementing value
+            d1 *= k;                                                // Next value in the n! term
+            d2 *= NU + k;                                           // Next value in the gamma(n+k+1) term
+            term = z2.powf(k.mul_add(2.0, NU)) / (d1 * d2);
+        }
+
+        sum
+    }
+
+    fn k_real(z: f64) -> f64 {
+        (FRAC_PI_2 / (NU * PI).sin()) * (i_nu_real_n(z) - i_nu_real_p(z))
+    }
+
+    pub const FIVESIXTHS: f64 = 5.0/6.0;
+    
+    pub fn vk_cov(x: f64) -> f64 {
+        // computes the rightmost two terms of Eqn (2.24)
+        let x_safe = x + 1e-7;
+        let y = k_real(x_safe);
+        y * x_safe.powf(FIVESIXTHS)
+    }
+}
+
+pub use vkcov::vk_cov;

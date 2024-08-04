@@ -94,6 +94,69 @@ pub use crate::geometry::{
 mod linalg;
 pub use crate::linalg::Matrix;
 
+pub trait Sampleable {
+    fn eval(&self, p: &Line) -> f64;
+    fn gradient(&self, p: &Line) -> Vec2D;
+    
+    /// Given a [Line], find the value of the [Sampleable] object
+    /// when it is traced by that line.
+    fn phase(&self, line: &Line) -> f64 {
+        self.eval(line)
+    }
+    /// Given a [Line] and a slope computation method ([SlopeMethod]), find the
+    /// slope of [Sampleable] function along that line.
+    fn slope(&self, line: &Line, method: &SlopeMethod) -> f64 {
+        match method {
+            SlopeMethod::Axial{gradient_axis} => {
+                self.gradient(line).dot(gradient_axis)/gradient_axis.norm()
+            },
+            SlopeMethod::TwoPoint{neg, pos} => {
+                let f_neg = self.eval(&(line+neg));
+                let f_pos = self.eval(&(line+pos));
+                (f_pos - f_neg)/(pos-neg).norm()
+            },
+            SlopeMethod::TwoEdge{edge_length, edge_separation, gradient_axis, npoints} => {
+                // the idea here is to take npoints along each of the two edges
+                // and find the average of the "point-wise" slopes along these
+                // edges.
+                //
+                // First, we build the points around the origin, then we effset them
+                // to the positive and negative sides of the "subaperture".
+                if *npoints == 0 {
+                    return 0.0;
+                }
+                let point_a =  edge_length * 0.5 * gradient_axis.ortho();
+                let point_b = -point_a.clone();
+                let points = Vec2D::linspace(&point_a, &point_b, *npoints);
+                
+                let points_pos: Vec<Vec2D> = points
+                .clone()
+                .into_iter()
+                .map(|p| p + gradient_axis * edge_separation * 0.5)
+                .collect();
+                let points_neg: Vec<Vec2D> = points
+                .clone()
+                .into_iter()
+                .map(|p| p - gradient_axis * edge_separation * 0.5)
+                .collect();
+                let mut slopes: Vec<f64> = vec![];
+                for i in 0..points_pos.len() {
+                    slopes.push(self.slope(line, &SlopeMethod::TwoPoint{
+                        neg: points_neg[i].clone(),
+                        pos: points_pos[i].clone(),
+                    }));
+                }
+                slopes.into_iter().sum::<f64>() / *npoints as f64
+            },
+        }
+    }
+}
+
+pub trait CoSampleable {
+    fn eval(&self, p: &Line, q: &Line) -> f64;
+}
+
+
 /// The atomic measurement unit.
 /// 
 /// A [Measurement] provides a scalar-valued sample of the system. Similar to an
@@ -165,80 +228,41 @@ pub enum Actuator{
         sigma: f64,
         /// position of actuator in 3d space, z=altitude.
         position: Vec3D,
-    }
+    },
+    TipTilt {
+        /// position along slope of TT actuator surface where the amplitude
+        /// of the phase is equal to +1.0 units. This vector is colinear with
+        /// the acuation axis. E.g., if this vector is `(1.0,0.0)`, then the 
+        /// response of the actuator will be a 
+        ///Deliberately not in arcseconds
+        /// so that you have to be deliberate and careful about your units.
+        unit_response: Vec2D,
+    },
 }
 
-impl Actuator {
-    /// Given a [Line], find the value of the [Actuator]'s influence function
-    /// when it is traced by that line.
-    pub fn phase(&self, line: &Line) -> f64 {
+impl Sampleable for Actuator {
+    fn eval(&self, line: &Line) -> f64 {
         match self {
             Self::Zero => 0.0,
-            Self::Gaussian {
-                position,
-                sigma,
-            } => {
+            Self::Gaussian{sigma, position} => {
                 let distance = position.distance_at_altitude(line);
                 gaussian(distance / sigma)
+            },
+            Self::TipTilt{unit_response} => {
+                line.position_at_altitude(0.0).dot(unit_response)
             }
         }
     }
-    /// Given a [Line] and a slope computation method ([SlopeMethod]), find the
-    /// slope of the influence function along that line.
-    pub fn slope(&self, line: &Line, method: &SlopeMethod) -> f64 {
+    fn gradient(&self, line: &Line) -> Vec2D {
         match self {
-            Self::Zero => 0.0,
-            Self::Gaussian {
-                sigma,
-                position,
-            } => {
-                match method {
-                    SlopeMethod::Axial{gradient_axis} => {
-                        let displacement = position.displacement_at_altitude(line);
-                        let fxy = gaussian2d(&displacement*(1.0/sigma));
-                        -fxy*(displacement.dot(gradient_axis))/sigma.powf(2.0)/gradient_axis.norm()
-                    },
-                    SlopeMethod::TwoPoint{neg, pos} => {
-                        let distance_neg = (position).distance_at_altitude(&(line+neg));
-                        let f_neg = gaussian(distance_neg/sigma);
-                        let distance_pos = (position).distance_at_altitude(&(line+pos));
-                        let f_pos = gaussian(distance_pos/sigma);
-                        (f_pos - f_neg)/(pos-neg).norm()
-                    },
-                    SlopeMethod::TwoEdge{edge_length, edge_separation, gradient_axis, npoints} => {
-                        // the idea here is to take npoints along each of the two edges
-                        // and find the average of the "point-wise" slopes along these
-                        // edges.
-                        //
-                        // First, we build the points around the origin, then we effset them
-                        // to the positive and negative sides of the "subaperture".
-                        if *npoints == 0 {
-                            return 0.0;
-                        }
-                        let point_a =  edge_length * 0.5 * gradient_axis.ortho();
-                        let point_b = -point_a.clone();
-                        let points = Vec2D::linspace(&point_a, &point_b, *npoints);
-                        
-                        let points_pos: Vec<Vec2D> = points
-                        .clone()
-                        .into_iter()
-                        .map(|p| p + gradient_axis * edge_separation * 0.5)
-                        .collect();
-                        let points_neg: Vec<Vec2D> = points
-                        .clone()
-                        .into_iter()
-                        .map(|p| p - gradient_axis * edge_separation * 0.5)
-                        .collect();
-                        let mut slopes: Vec<f64> = vec![];
-                        for i in 0..points_pos.len() {
-                            slopes.push(self.slope(line, &SlopeMethod::TwoPoint{
-                                neg: points_neg[i].clone(),
-                                pos: points_pos[i].clone(),
-                            }));
-                        }
-                        slopes.into_iter().sum::<f64>() / *npoints as f64
-                    },
-                }
+            Self::Zero => Vec2D::new(0.0,0.0),
+            Self::Gaussian{sigma, position} => {
+                let displacement = position.displacement_at_altitude(line);
+                let fxy = gaussian2d(&displacement*(1.0/sigma));
+                -fxy*(displacement)/sigma.powf(2.0)
+            },
+            Self::TipTilt{unit_response} => {
+                unit_response.clone()
             }
         }
     }
@@ -391,10 +415,10 @@ impl Matrix for IMat<'_> {
         }
     }
     fn nrows(&self) -> usize {
-        self.measurements.len() as usize
+        self.measurements.len()
     }
     fn ncols(&self) -> usize {
-        self.actuators.len() as usize
+        self.actuators.len()
     }
 }
 
@@ -404,11 +428,61 @@ impl fmt::Display for IMat<'_> {
     }
 }
 
+struct VonKarmanLayer {
+    r0: f64,
+    l0: f64,
+    alt: f64,
+    wind: Vec2D,
+}
+
+impl CoSampleable for VonKarmanLayer {
+    fn eval(&self, linea: &Line, lineb:&Line) -> f64 {
+        let p1 = linea.position_at_altitude(self.alt);
+        let p2 = lineb.position_at_altitude(self.alt);
+        vk_cov((p1-p2).norm())
+    }
+}
 
 #[derive(Debug)]
 pub struct CovMat<'a> {
     measurements_left: &'a [Measurement],
     measurements_right: &'a [Measurement],
+}
+
+impl Matrix for CovMat<'_> {
+    fn nrows(&self) -> usize {
+        self.measurements_left.len()
+    }
+    fn ncols(&self) -> usize {
+        self.measurements_right.len()
+    }
+    fn eval(&self, row_index: usize, col_index: usize) -> f64 {
+        let meas_left: &Measurement = &self.measurements_left[row_index];
+        let meas_right: &Measurement = &self.measurements_right[col_index];
+        match (meas_left, meas_right) {
+            (Measurement::Zero,_) => 0.0,
+            (_, Measurement::Zero) => 0.0,
+            (
+                Measurement::Phase{line: line_left},
+                Measurement::Phase{line: line_right},
+            ) => {
+                todo!();
+                //cov_phase_to_phase(line_left, line_right)
+            },
+            (
+                Measurement::Slope{..},
+                Measurement::Phase{..},
+            ) => todo!(),
+            (
+                Measurement::Phase{..},
+                Measurement::Slope{..},
+            ) => todo!(),
+            (
+                Measurement::Slope{..},
+                Measurement::Slope{..},
+            ) => todo!(),
+        }
+    }
 }
 
 
@@ -576,4 +650,84 @@ mod tests {
         let imat = IMat::new(&measurements, &actuators);
         assert_abs_diff_eq!(imat.eval(0,0),imat.eval(1,0));
     }
+
+    #[test]
+    fn slope_tt_axial() {
+        let actuators = [
+            Actuator::TipTilt{
+                unit_response: Vec2D::x_unit()
+            }
+        ];
+        let measurements = [0.0,0.5,1.0,1.5,2.0].map(|x|
+            Measurement::Slope{
+                line: Line::new(x, 0.0, 0.0, 0.0),
+                method: SlopeMethod::Axial{
+                    gradient_axis: Vec2D::new(1.0,0.0),
+                },
+            }
+        );
+        let imat = IMat::new(&measurements, &actuators);
+        assert_abs_diff_eq!(imat.eval(0,0), 1.0, epsilon=f64::EPSILON);
+        assert_abs_diff_eq!(imat.eval(2,0), 1.0, epsilon=f64::EPSILON);
+        assert_abs_diff_eq!(imat.eval(4,0), 1.0, epsilon=f64::EPSILON);
+    }
+
+    #[test]
+    fn slope_tt_twopoint() {
+        let actuators = [
+            Actuator::TipTilt{
+                unit_response: Vec2D::x_unit()
+            }
+        ];
+        let measurements = [
+            Measurement::Slope{
+                line: Line::new(1.0, 0.0, 0.0, 0.0),
+                method: SlopeMethod::TwoPoint{
+                    neg: Vec2D::new(-1e-6, 0.0),
+                    pos: Vec2D::new(1e-6, 0.0)
+                }
+            },
+            Measurement::Slope{
+                line: Line::new(1.0, 0.0, 0.0, 0.0),
+                method: SlopeMethod::Axial{
+                    gradient_axis: Vec2D::new(1.0,0.0),
+                },
+            }
+        ];
+        let imat = IMat::new(&measurements, &actuators);
+        assert_abs_diff_eq!(imat.eval(0,0),imat.eval(1,0),epsilon=1e-8);
+    }
+
+    #[test]
+    fn tt_on_axis_phase() {
+        let actuators = [
+            Actuator::TipTilt{
+                unit_response: Vec2D::x_unit()
+            }
+        ];
+        let measurements = [
+            Measurement::Phase {
+                line: Line::new_on_axis(0.0, 0.0)
+            }
+        ];
+        let imat = IMat::new(&measurements, &actuators);
+        assert_abs_diff_eq!(imat.eval(0,0), 0.0, epsilon = f64::EPSILON);
+    }
+
+    #[test]
+    fn tt_off_axis_phase() {
+        let actuators = [
+            Actuator::TipTilt{
+                unit_response: Vec2D::x_unit()
+            }
+        ];
+        let measurements = [
+            Measurement::Phase{
+                line: Line::new(2.0, 0.0, 0.0, 0.0)
+            }
+        ];
+        let imat = IMat::new(&measurements, &actuators);
+        assert_abs_diff_eq!(imat.eval(0,0), 2.0, epsilon = f64::EPSILON);
+    }
+
 }
