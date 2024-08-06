@@ -61,6 +61,11 @@ mod tests {
 }
 
 mod vkcov {
+    // not super pleased with this set of calculations,
+    // I think it could be done more accurately and quicker
+    // using something similar to in ships or however it's done
+    // in scipy. This method seems to break down for very high
+    // inputs.
     use std::f64::consts::{     // Using std lib constants
         PI,                     // Pi
         FRAC_PI_2               // Pi / 2

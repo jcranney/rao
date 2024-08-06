@@ -15,8 +15,9 @@ fn main() {
     for mf in (0..8000).map(|m| m as f64 * 0.2) {
         measurements.push(Measurement::Slope{
             line: Line::new(mf,0.0,0.0,0.0),
-            method: SlopeMethod::Axial{
-                gradient_axis: Vec2D::x_unit()
+            method: SlopeMethod::TwoPoint {
+                neg: Vec2D::new( 0.1, 0.0),
+                pos: Vec2D::new(-0.1, 0.0),
             },
         });
     }
