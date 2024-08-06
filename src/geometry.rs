@@ -220,6 +220,10 @@ impl Line {
     pub fn position_at_altitude(&self, alt: f64) -> Vec2D {
         Vec2D::new(alt*self.xz + self.x0, alt*self.yz + self.y0)
     }
+    
+    pub fn distance_at_ground(&self, other: &Line) -> f64 {
+        Vec2D::new(self.x0 - other.x0, self.y0 - other.y0).norm()
+    }
 }
 
 

@@ -13,12 +13,9 @@ fn main() {
         });
     }
     for mf in (0..8000).map(|m| m as f64 * 0.2) {
-        measurements.push(Measurement::Slope{
-            line: Line::new(mf,0.0,0.0,0.0),
-            method: SlopeMethod::TwoPoint {
-                neg: Vec2D::new( 0.1, 0.0),
-                pos: Vec2D::new(-0.1, 0.0),
-            },
+        measurements.push(Measurement::SlopeTwoLine {
+            line_pos: Line::new_on_axis(0.1+mf, 0.0),
+            line_neg: Line::new_on_axis(-0.1+mf, 0.0),
         });
     }
     let imat = IMat::new(&measurements, &actuators);

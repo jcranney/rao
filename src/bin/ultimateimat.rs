@@ -37,23 +37,19 @@ fn main() {
                 let xz = thetax[w]*4.848e-6;
                 let yz = thetay[w]*4.848e-6;
                 let line = Line::new(x0,xz,y0,yz);
-                slope_measurements[idx] = Measurement::Slope{
-                    line: line.clone(),
-                    method: SlopeMethod::TwoEdge{
-                        edge_separation: WFSPITCH,
-                        edge_length: WFSPITCH,
-                        npoints: 2,
-                        gradient_axis: Vec2D::x_unit(),
-                    }
+                slope_measurements[idx] = Measurement::SlopeTwoEdge{
+                    central_line: line.clone(),
+                    edge_separation: WFSPITCH,
+                    edge_length: WFSPITCH,
+                    npoints: 2,
+                    gradient_axis: Vec2D::x_unit(),
                 };
-                slope_measurements[idx+32*32] = Measurement::Slope{
-                    line: line.clone(),
-                    method: SlopeMethod::TwoEdge{
-                        edge_separation: WFSPITCH,
-                        edge_length: WFSPITCH,
-                        npoints: 2,
-                        gradient_axis: Vec2D::y_unit(),
-                    }
+                slope_measurements[idx] = Measurement::SlopeTwoEdge{
+                    central_line: line.clone(),
+                    edge_separation: WFSPITCH,
+                    edge_length: WFSPITCH,
+                    npoints: 2,
+                    gradient_axis: Vec2D::y_unit(),
                 };
                 idx += 1;
             }

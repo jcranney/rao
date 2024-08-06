@@ -35,28 +35,26 @@ fn main() {
             // define the line that the subaperture looks through:
             let line = Line::new(x0,xz,y0,yz);
             // slope-style measurement for x-axis slope:
-            measurements.push(Measurement::Slope{
-                line: line.clone(),
-                    // using the two edges of the subaperture to
-                    // define the slope:
-                    method: SlopeMethod::TwoEdge{
-                        edge_separation: PITCH,
-                        edge_length: PITCH,
-                        // npoints to sample along edge of subap:
-                        npoints: 5,
-                        // desired axis of slope measurement
-                        gradient_axis: Vec2D::x_unit(),
-                    }
+            // using the two edges of the subaperture to
+            // define the slope:
+            measurements.push(Measurement::SlopeTwoEdge{
+                central_line: line.clone(),
+                edge_separation: PITCH,
+                edge_length: PITCH,
+                // npoints to sample along edge of subap:
+                npoints: 5,
+                // desired axis of slope measurement
+                gradient_axis: Vec2D::x_unit(),
             });
             // same, but for y-axis slope:
-            measurements.push(Measurement::Slope{
-                line: line.clone(),
-                method: SlopeMethod::TwoEdge{
-                    edge_separation: PITCH,
-                    edge_length: PITCH,
-                    npoints: 5,
-                    gradient_axis: Vec2D::y_unit(),
-                }
+            measurements.push(Measurement::SlopeTwoEdge{
+                central_line: line.clone(),
+                edge_separation: PITCH,
+                edge_length: PITCH,
+                // npoints to sample along edge of subap:
+                npoints: 5,
+                // desired axis of slope measurement
+                gradient_axis: Vec2D::y_unit(),
             });
         }
     }

@@ -41,14 +41,12 @@ fn edgeslope_gaussian() {
     let measurements: Vec<rao::Measurement> = (0..100)
     .map(|idx| idx as f64 * 0.2)
     .map(|posx|
-        Measurement::Slope{
-            line: Line::new(posx, 0.0, 0.0, 0.0),
-            method: SlopeMethod::TwoEdge{
-                edge_separation: 0.2,
-                edge_length: 0.2,
-                npoints: 5,
-                gradient_axis: Vec2D::x_unit(),
-            }
+        Measurement::SlopeTwoEdge{
+            central_line: Line::new(posx, 0.0, 0.0, 0.0),
+            edge_separation: 0.2,
+            edge_length: 0.2,
+            npoints: 5,
+            gradient_axis: Vec2D::x_unit(),
         }
     ).collect();
 
