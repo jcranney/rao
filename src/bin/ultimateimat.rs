@@ -44,7 +44,7 @@ fn main() {
                     npoints: 2,
                     gradient_axis: Vec2D::x_unit(),
                 };
-                slope_measurements[idx] = Measurement::SlopeTwoEdge{
+                slope_measurements[idx+32*32] = Measurement::SlopeTwoEdge{
                     central_line: line.clone(),
                     edge_separation: WFSPITCH,
                     edge_length: WFSPITCH,
@@ -64,14 +64,14 @@ fn main() {
     let shape = [mat.ncols(), mat.nrows()];
     let data: Vec<f64> = mat.flattened_array();
     let primary_hdu = Hdu::new(&shape, data);
-    Fits::create("/tmp/ultimate_dcm.fits", primary_hdu).expect("Failed to create");
+    Fits::create("/tmp/ultimate_dmc.fits", primary_hdu).expect("Failed to create");
 
     println!("creating imat ts (DM to phase)");
     let mat = IMat::new(&phase_measurements, &actuators);
     let shape = [mat.ncols(), mat.nrows()];
     let data: Vec<f64> = mat.flattened_array();
     let primary_hdu = Hdu::new(&shape, data);
-    Fits::create("/tmp/ultimate_dct.fits", primary_hdu).expect("Failed to create");
+    Fits::create("/tmp/ultimate_dtc.fits", primary_hdu).expect("Failed to create");
 
     println!("creating cmm (meas<->meas)");
     let mat = CovMat::new(&slope_measurements, &slope_measurements, &cov);
