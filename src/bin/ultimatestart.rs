@@ -38,8 +38,8 @@ fn main() {
     for w in 0..NWFS {
         for i in 0..NSUBX {
             for j in 0..NSUBX {
-                let x0 = ((j as f64) - NSUBX as f64 + 0.5) * WFSPITCH;
-                let y0 = ((i as f64) - NSUBX as f64 + 0.5) * WFSPITCH;
+                let x0 = ((j as f64) - NSUBX as f64/2 + 0.5) * WFSPITCH;
+                let y0 = ((i as f64) - NSUBX as f64/2 + 0.5) * WFSPITCH;
                 let xz = THETAX[w]*AS2RAD;
                 let yz = THETAY[w]*AS2RAD;
                 let line = Line::new(x0,xz,y0,yz);
