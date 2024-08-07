@@ -52,7 +52,7 @@ impl Vec2D {
     /// Calculate a uniformly spaced set of points between two [Vec2D]s.
     pub fn linspace(a: &Self, b: &Self, npoints: u32) -> Vec<Self> {
         (0..npoints)
-        .map(|u| u as f64 / (npoints-1) as f64)
+        .map(|u| (u as f64 / npoints as f64) + 1.0/ (2.0 * npoints as f64))
         .map(|t| t*a + (1.0-t)*b)
         .collect()
     }

@@ -4,15 +4,23 @@ use fitrs::{Fits, Hdu};
 fn main() {
     const DMPITCH: f64 = 0.125;
     const WFSPITCH: f64 = 0.25;
+    const NACTUX: usize = 64;
+    const NSUBX: usize = 32;
+    const NWFS: usize = 4;
+    const AS2RAD: f64 = 4.848e-6;
+    const THETAX: [f64; NWFS] = [-10.0, -10.0,  10.0,  10.0];
+    const THETAY: [f64; NWFS] = [-10.0,  10.0, -10.0,  10.0];
+    const COUPLING: f64 = 0.3;
+
     let mut actuators: Vec<rao::Actuator> = vec![];
     let mut phase_measurements: Vec<rao::Measurement> = vec![];
-    for i in 0..64 {
-        for j in 0..64 {
-            let x = ((j as f64) - 32.0)*DMPITCH;
-            let y = ((i as f64) - 32.0)*DMPITCH;
+    for i in 0..NACTUX {
+        for j in 0..NACTUX {
+            let x = ((j as f64) - NACTUX as f64 / 2.0)*DMPITCH;
+            let y = ((i as f64) - NACTUX as f64 / 2.0)*DMPITCH;
             actuators.push(
                 Actuator::Gaussian{
-                    sigma: coupling_to_sigma(0.5, 0.125),
+                    sigma: coupling_to_sigma(COUPLING, DMPITCH),
                     position: Vec3D::new(x, y, 0.0),
                 }
             );
@@ -25,36 +33,34 @@ fn main() {
     }
 
     const M: Measurement = Measurement::Zero;
-    let mut slope_measurements = [M; 32*32*4*2];
-    let thetax: [f64; 4] = [-10.0, -10.0, 10.0, 10.0];
-    let thetay: [f64; 4] = [-10.0, 10.0, -10.0, 10.0];
+    let mut slope_measurements = [M; NSUBX*NSUBX*NWFS*2];
     let mut idx = 0;
-    for w in 0..4 {
-        for i in 0..32 {
-            for j in 0..32 {
-                let x0 = ((j as f64) - 15.5) * WFSPITCH;
-                let y0 = ((i as f64) - 15.5) * WFSPITCH;
-                let xz = thetax[w]*4.848e-6;
-                let yz = thetay[w]*4.848e-6;
+    for w in 0..NWFS {
+        for i in 0..NSUBX {
+            for j in 0..NSUBX {
+                let x0 = ((j as f64) - NSUBX as f64 + 0.5) * WFSPITCH;
+                let y0 = ((i as f64) - NSUBX as f64 + 0.5) * WFSPITCH;
+                let xz = THETAX[w]*AS2RAD;
+                let yz = THETAY[w]*AS2RAD;
                 let line = Line::new(x0,xz,y0,yz);
                 slope_measurements[idx] = Measurement::SlopeTwoEdge{
                     central_line: line.clone(),
                     edge_separation: WFSPITCH,
                     edge_length: WFSPITCH,
-                    npoints: 2,
+                    npoints: 1,
                     gradient_axis: Vec2D::x_unit(),
                 };
-                slope_measurements[idx+32*32] = Measurement::SlopeTwoEdge{
+                slope_measurements[idx+NSUBX*NSUBX] = Measurement::SlopeTwoEdge{
                     central_line: line.clone(),
                     edge_separation: WFSPITCH,
                     edge_length: WFSPITCH,
-                    npoints: 2,
+                    npoints: 1,
                     gradient_axis: Vec2D::y_unit(),
                 };
                 idx += 1;
             }
         }
-        idx += 32*32;
+        idx += NSUBX*NSUBX;
     }
 
     let cov = VonKarmanLayer::new(0.1, 25.0, 0.0);
@@ -64,26 +70,30 @@ fn main() {
     let shape = [mat.ncols(), mat.nrows()];
     let data: Vec<f64> = mat.flattened_array();
     let primary_hdu = Hdu::new(&shape, data);
-    Fits::create("/tmp/ultimate_dmc.fits", primary_hdu).expect("Failed to create");
+    Fits::create("/tmp/ultimate_dmc.fits", primary_hdu)
+    .expect("Failed to create");
 
     println!("creating imat ts (DM to phase)");
     let mat = IMat::new(&phase_measurements, &actuators);
     let shape = [mat.ncols(), mat.nrows()];
     let data: Vec<f64> = mat.flattened_array();
     let primary_hdu = Hdu::new(&shape, data);
-    Fits::create("/tmp/ultimate_dtc.fits", primary_hdu).expect("Failed to create");
+    Fits::create("/tmp/ultimate_dtc.fits", primary_hdu)
+    .expect("Failed to create");
 
     println!("creating cmm (meas<->meas)");
     let mat = CovMat::new(&slope_measurements, &slope_measurements, &cov);
     let shape = [mat.ncols(), mat.nrows()];
     let data: Vec<f64> = mat.flattened_array();
     let primary_hdu = Hdu::new(&shape, data);
-    Fits::create("/tmp/ultimate_cmm.fits", primary_hdu).expect("Failed to create");
+    Fits::create("/tmp/ultimate_cmm.fits", primary_hdu)
+    .expect("Failed to create");
 
     println!("creating ctm (phase<->meas)");
     let mat = CovMat::new(&phase_measurements, &slope_measurements, &cov);
     let shape = [mat.ncols(), mat.nrows()];
     let data: Vec<f64> = mat.flattened_array();
     let primary_hdu = Hdu::new(&shape, data);
-    Fits::create("/tmp/ultimate_ctm.fits", primary_hdu).expect("Failed to create");
+    Fits::create("/tmp/ultimate_ctm.fits", primary_hdu)
+    .expect("Failed to create");
 }
