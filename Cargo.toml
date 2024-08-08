@@ -1,8 +1,13 @@
 [package]
 name = "rao"
 version = "0.1.0"
+authors = ["Jesse Cranney <jesse.cranney@anu.edu.au>"]
 edition = "2021"
-default-run = "rao"
+description = "Robust and scalable Adaptive Optics tools"
+repository = "https://github.com/jcranney/rao"
+license = "MIT"
+keywords = ["adaptive_optics", "adaptive", "optics"]
+
 
 [dependencies]
 approx = "0.5.1"

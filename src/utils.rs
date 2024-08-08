@@ -1,5 +1,3 @@
-use crate::geometry::Vec2D;
-
 /// Convenience function for converting a given `coupling` and `pitch` to
 /// `sigma` in the creation of Gaussian influence functions.
 /// 
@@ -37,10 +35,6 @@ pub fn coupling_to_sigma(coupling: f64, pitch: f64) -> f64
 pub fn gaussian(x: f64) -> f64 {
     (-0.5*(x).powf(2.0)).exp()
 }
-/// Evaluate the centrally symmetric 2D Gaussian function.
-pub fn gaussian2d(v: Vec2D) -> f64 {
-    (-0.5*(v.norm2())).exp()
-}
     
 #[cfg(test)]
 mod tests {
@@ -49,14 +43,6 @@ mod tests {
     #[test]
     fn coupling_conversion() {
         assert_abs_diff_eq!(coupling_to_sigma((-1.0_f64).exp(), 1.0).powf(2.0), 0.5)
-    }
-
-    #[test]
-    fn gaussian_1d_eq_2d() {
-        let x = 1.234;
-        let y = 0.0;
-        assert!(gaussian(x) > 0.0);
-        assert_abs_diff_eq!(gaussian(x),gaussian2d(Vec2D::new(x,y)));
     }
 }
 
@@ -164,4 +150,8 @@ mod vkcov {
     }
 }
 
+/// von Karman covariance function
+///
+/// calculated the covariance between two points separated by a distance `r`
+/// for a von Karman layer of turbulence with a specified r0 and L0.
 pub use vkcov::vk_cov;

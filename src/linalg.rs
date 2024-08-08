@@ -1,9 +1,13 @@
 use rayon::prelude::*;
 use std::fmt;
 
+/// Convenience trait to standardise interactions with "matrix-like" objects.
 pub trait Matrix {
+    /// number of rows in the matrix
     fn nrows(&self)->usize;
+    /// number of columns in the matrix
     fn ncols(&self)->usize;
+    /// evaluated value of the matrix at a specified element.
     fn eval(&self, row_index: usize, col_index: usize)->f64;
     
     /// Return the (C-format / row-major) flattened matrix, e.g., to

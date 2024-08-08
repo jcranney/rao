@@ -2,15 +2,15 @@
 //! 
 //! `rao` - Adaptive Optics tools in Rust - is a set of fast and robust adaptive
 //! optics utilities. The current scope of `rao` is for the calculation of
-//! large matrices in AO, used in the ocnfiguration of real-time adaptive optics,
+//! large matrices in AO, used in the configuration of real-time adaptive optics,
 //! control. Specifically, we aim to provide fast, scalable, and reliable APIs for
 //! generating:
 //!  - `rao::IMat` - the interaction matrix between measurements and actuators,
-//!  - `rao::CovMat` - the covariance matrix between random variables (e.g., measurements)
+//!  - `rao::CovMat` - the covariance matrix between measurements.
 //!
-//! These two matrices are the largest computational burden in the configuration
-//! of real-time control for AO, and having fast and scalable methods for their
-//! computation enables the optimisation of the AO loop [citation needed].
+//! These two matrices are typically the largest computational burden in the
+//! configuration of real-time control (RTC) for AO, and also the most 
+//! performance-sensitive parts of the RTC.
 //!
 //! # Examples
 //! Building an interaction matrix for a square-grid DM and a square-grid SH-WFS:
@@ -76,8 +76,8 @@
 
 #[macro_use] extern crate impl_ops;
 
-mod utils;
-pub use crate::utils::*;
+pub mod utils;
+pub use utils::coupling_to_sigma;
 mod geometry;
 pub use crate::geometry::{
     Vec2D,
@@ -96,30 +96,49 @@ pub use crate::core::{
 };
 
 
-/// The atomic measurement unit.
+/// Common [Sampler]s in Adaptive Optics
 /// 
-/// A [Measurement] provides a scalar-valued sample of the system. Similar to an
-/// [Actuator], a single measurement device (e.g., a Shack Hartmann WFS) might be
-/// comprised of many [Measurement]s, e.g., `&[Measurement; N]`.
+/// A [Measurement] provides a scalar-valued sample of an AO system. A single
+/// measurement device (e.g., a Shack Hartmann WFS) is typically comprised of 
+/// many [Measurement]s, e.g., `&[Measurement; N]`.
 #[derive(Debug)]
 pub enum Measurement{
     /// The null measurement, always returning 0.0 regardless of the measured object.
     Zero,
     /// Phase measurement along a given [Line].
     Phase {
-        /// [Line] to trace measurement through.
+        /// [Line] in 3D space to trace through [Sampleable] objects.
         line: Line,
     },
-    /// Measure the average slope over the interval connecting two points.
+    /// Slope measurement, defined by two [Line]s in 3D space.
+    ///
+    /// The slope measured is equal to the *sampled function at the point where
+    /// `line_pos` intersects it* minus the *sampled function at the point
+    /// where `line_neg` intersects it*, divided by the *distance between the
+    /// two lines at zero-altitude*.
     SlopeTwoLine {
-        /// tbd
+        /// positive end of slope (by convention)
         line_pos: Line,
+        /// negative end of slope (by convention)
         line_neg: Line,
     },
+    /// Slope measurement, defined by a [Line] in 3D space and  the sampled edges
+    /// a rectangle in 2D space.
+    ///
     /// Approximate the average slope over a region defined by two edges of a rectangle.
     /// The edges are defined by their length, their separation, and the axis along which
-    /// they are separated (the *gradient axis*).
+    /// they are separated (the *gradient axis*). The edges of the rectangle are sampled
+    /// so that the spacing between points is uniform and the furthest distance to an
+    /// unsampled point of the edge is minimal, i.e.:
+    ///  - `npoints=1` => `[----x----]`,
+    ///  - `npoints=2` => `[--x---x--]`,
+    ///  - `npoints=3` => `[-x--x--x-]`,
+    ///  - *etc*
+    ///
+    /// This is not the typical "linspace", which is ill-defined for 1 point, though one
+    /// could implement that as a [Sampler] wrapper around [Measurement::SlopeTwoLine].
     SlopeTwoEdge {
+        /// Principle axis of the WFS
         central_line: Line,
         /// Length of edges (e.g., subaperture height for x-slope measurement)
         edge_length: f64,
@@ -127,12 +146,26 @@ pub enum Measurement{
         edge_separation: f64,
         /// Axis of gradient vector to sample, e.g., x-slope -> `Vec2D::new(1.0, 0.0)`
         gradient_axis: Vec2D,
-        /// Number of points to sample along each edge (more points is more accurate but more demanding).
+        /// Number of points to sample along each edge (more points can be more accurate).
         npoints: u32,
     },
 }
 
+/// [Measurement] is the prototypical [Sampler] type.
 impl Sampler for Measurement {
+    /// The [Sampler::get_bundle] method implementation for the [Measurement] variants
+    /// should serve as an example for implementing other [Sampler] types. Inspect the
+    /// source code for the reference implementation. In short:
+    ///  - a [Measurement::Zero] variant returns an empty vector,
+    ///  - a [Measurement::Phase] variant returns a single line with a coefficient of `1.0`,
+    ///  - a [Measurement::SlopeTwoLine] variant returns two lines, with a positive
+    ///    and negative coefficient (for the *start* and *end* of the slope), scaled by
+    ///    the inverse of the ground separation of the lines, so that the resulting units
+    ///    are in *sampled function units per distance unit*.
+    ///  - a [Measurement::SlopeTwoEdge] variant returns `2 * npoints` lines, consisting of
+    ///    `npoints` positive coefficients, and `npoints` negative coefficients, each scaled
+    ///    by the inverse of the ground-layer separation and a factor of `1.0 / npoints as f64`,
+    ///    in order to get a result which is in units of *sampled function units per distance unit*. 
     fn get_bundle(&self) -> Vec<(Line,f64)> {
         match self {
             Measurement::Zero => vec![],
@@ -175,7 +208,7 @@ pub enum Actuator{
     /// A null actuator, making zero impact on any `Measurement`
     Zero,
     /// A circularly symmetric Gaussian actuator, centred at `position` with
-    /// a specified scalar `sigma`. See [gaussian2d] for more info.
+    /// a specified scalar `sigma`. See [utils::gaussian] for more info.
     Gaussian {
         /// sigma of gaussian function in metres. 
         sigma: f64,
@@ -199,7 +232,7 @@ impl Sampleable for Actuator {
             Self::Zero => 0.0,
             Self::Gaussian{sigma, position} => {
                 let distance = position.distance_at_altitude(line);
-                gaussian(distance / sigma)
+                utils::gaussian(distance / sigma)
             },
             Self::TipTilt{unit_response} => {
                 line.position_at_altitude(0.0).dot(unit_response)
@@ -208,33 +241,32 @@ impl Sampleable for Actuator {
     }
 }
 
-
+/// Simple covariance model, this might be refactored into an enum of models.
 pub struct VonKarmanLayer {
-    r0: f64,
-    l0: f64,
-    alt: f64,
+    pub r0: f64,
+    pub l0: f64,
+    pub alt: f64,
 }
 
 impl VonKarmanLayer {
+    /// Construct a new von Karman turbulence layer from its parameters
     pub fn new(r0: f64, l0: f64, alt: f64) -> VonKarmanLayer {
         VonKarmanLayer {
             r0, l0, alt
         }
     }
-    pub fn new_test_layer(r0: f64) -> VonKarmanLayer {
-        VonKarmanLayer {
-            r0: r0,
-            l0: 25.0,
-            alt: 0.0,
-        }
-    }
 }
 
+/// [VonKarmanLayer] is (for now) the prototypical [CoSampleable] object.
+///
+/// Perhaps confusingly, this implementation allows the cosampling of the
+/// von Karman turbulence statistical model, returning the covariance between
+/// two [Line]s intercepting that layer.
 impl CoSampleable for VonKarmanLayer {
     fn cosample(&self, linea: &Line, lineb:&Line) -> f64 {
         let p1 = linea.position_at_altitude(self.alt);
         let p2 = lineb.position_at_altitude(self.alt);
-        vk_cov((p1-p2).norm(), self.r0, self.l0)
+        utils::vk_cov((p1-p2).norm(), self.r0, self.l0)
     }
 }
 
@@ -450,7 +482,7 @@ mod tests {
         };
         let line = Line::new_on_axis(0.0,0.0);
         let a = vk.cosample(&line, &line);
-        assert_abs_diff_eq!(a,vk_cov(0.0, vk.r0, vk.l0));
+        assert_abs_diff_eq!(a,utils::vk_cov(0.0, vk.r0, vk.l0));
         assert_abs_diff_eq!(a,856.3466131373517,epsilon=1e-3);
     }
 

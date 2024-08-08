@@ -47,14 +47,14 @@ fn main() {
                     central_line: line.clone(),
                     edge_separation: WFSPITCH,
                     edge_length: WFSPITCH,
-                    npoints: 1,
+                    npoints: 2,
                     gradient_axis: Vec2D::x_unit(),
                 };
                 slope_measurements[idx+NSUBX*NSUBX] = Measurement::SlopeTwoEdge{
                     central_line: line.clone(),
                     edge_separation: WFSPITCH,
                     edge_length: WFSPITCH,
-                    npoints: 1,
+                    npoints: 2,
                     gradient_axis: Vec2D::y_unit(),
                 };
                 idx += 1;
