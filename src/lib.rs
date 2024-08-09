@@ -198,7 +198,7 @@ impl Sampler for Measurement {
 
 
 
-/// The atomic actuation unit.
+/// Common [Sampleable]s in Adaptive Optics.
 /// 
 /// An [Actuator]'s state is defined by a scalar value, so a device with `N`
 /// actuatable degrees of freedom is considered as `N` different [Actuator]s,

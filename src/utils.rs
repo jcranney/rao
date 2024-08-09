@@ -1,3 +1,5 @@
+//! Convenience functions and utilities for rao.
+
 /// Convenience function for converting a given `coupling` and `pitch` to
 /// `sigma` in the creation of Gaussian influence functions.
 /// 
