@@ -173,79 +173,79 @@ pub trait CoSampleable {
 /// *arcseconds per volt*, or something similar, but as explained below, there is
 /// no need for the `rao` library to be this definitive on units.
 ///
-/// # Notes on units
-/// In Adaptive Optics, there is very little standardisation of units for measurements
-/// and actuators, but some units are seen more often than others. For example, we
-/// often see:
-///  - microns, metres, radians, or waves for phase measurement units,
-///  - arcsec, radians, or other dimensionless units for slope measurement units,
-///  - microns, metres, waves, arcseconds (e.g., for tip-tilt mirrors), or volts
-///    for actuator units.
-///
-/// This is a common point of confusion, particularly for AO newcomers. As it happens,
-/// if we are operating under the paraxial regime, and we only consider linear interaction
-/// functions (i.e., those that are well captured by an *Interaction Matrix*), then
-/// we can safely refuse to define any particular units in this library. 
-///
-/// To demonstrate, consider the above example. The units of the
-/// slope measurements are in *influence function units* per *distance units*.
-///
-/// The influence
-/// function in this case is Gaussian, and is parameterised only by its standard
-/// deviation, `sigma`, which is in the same lineal distance units as the various
-/// coordinates we defined (in that case, metres). The Gaussian function has a value of 1.0 at its centre,
-/// so the assumption is that the command units are such that an input of 1.0 would
-/// produce a phase of 1.0 in the desired phase units. Let's assume that the desired
-/// phase units are microns, then the commands should be scaled such that a command of
-/// 1.0 would produce a surface aberration of the DM equal to 1.0 microns at the 
-/// actuator position.
-/// Then the output of the interaction matrix (the slopes) would be in units of 
-/// microns per metres == micro-radians (based on our assumptions here). If one desired "arcseconds"
-/// units for slopes, then one can convert (the dimensionless) micro-radians to 
-/// arcseconds by the usual `180/PI*3600/1e6`. Building these assumptions into this
-/// library assumes the user's intentions, and leaving them out puts the burden on
-/// the user to treat their units with care and precision. I'm still not sure if
-/// it's a brave choice or a cowardly one, but we decide to assume the user's 
-/// *attention* rather than their *intention*.
-///
-/// In the example above, we denoted the distance units as metres,
-/// but if one assumed different distance units, the resulting interaction matrix
-/// would change only in the appropriate way. Let's say that I prefer using the units of
-/// [furlongs](https://en.wikipedia.org/wiki/Furlong) (1 furlong ==  201.1680 metres).
-/// Then I would have measured my AO system to have the geometry:
-/// ```
-/// const PITCH: f64 = 9.941e-3;  // furlongs
-/// const ALTITUDE: f64 = 49.71;  // furlongs
-/// const ACTU_POS: [[f64;2];2] = [
-///     [-4.971e-3, 0.0],  // [x1,y1]
-///     [ 4.971e-3, 0.0],  // [x2,y2]
-/// ];
-/// const MEAS_POS: [[f64;2];3] = [  // furlongs
-///     [-4.971e-3, -4.971e-3],
-///     [ 0.0,  0.0],
-///     [ 4.971e-3,  4.971e-3],
-/// ];
-/// ```
-/// Replacing the variables in the example above with these ones, I would get my
-/// interaction matrix and would be confident that the units of the interaction
-/// matrix are "influence function units per furlong per actuator unit"
-/// ```txt
-/// [[ 73.31 29.32 ]
-///  [ -0.00 -0.00 ]
-///  [ -29.32 -73.31 ]]
-/// ```
-/// Note that this is exactly the same interaction matrix as before, but scaled by
-/// a factor of 201.1680 (metres per furlong).
-/// The way to read this is, for example, the gradient of the first influence 
-/// function when traced along the first measurement axis is 73.31 units per furlong,
-/// or indeed, per YOUR_UNITS where you assumed those units in the definition of
-/// the system. The point is, if you are consistent with your inputs, then you can 
-/// use any units and the output will comply.
-/// 
-/// At present, the only influence functions available are the Gaussian one, and
-/// "tip-tilt" but this "unit agnosticism" is so attractive that it might as well
-/// set the convention for this crate:
-/// *where possible, avoid assuming/defining/requiring units*.
+// # Notes on units
+// In Adaptive Optics, there is very little standardisation of units for measurements
+// and actuators, but some units are seen more often than others. For example, we
+// often see:
+//  - microns, metres, radians, or waves for phase measurement units,
+//  - arcsec, radians, or other dimensionless units for slope measurement units,
+//  - microns, metres, waves, arcseconds (e.g., for tip-tilt mirrors), or volts
+//    for actuator units.
+//
+// This is a common point of confusion, particularly for AO newcomers. As it happens,
+// if we are operating under the paraxial regime, and we only consider linear interaction
+// functions (i.e., those that are well captured by an *Interaction Matrix*), then
+// we can safely refuse to define any particular units in this library. 
+//
+// To demonstrate, consider the above example. The units of the
+// slope measurements are in *influence function units* per *distance units*.
+//
+// The influence
+// function in this case is Gaussian, and is parameterised only by its standard
+// deviation, `sigma`, which is in the same lineal distance units as the various
+// coordinates we defined (in that case, metres). The Gaussian function has a value of 1.0 at its centre,
+// so the assumption is that the command units are such that an input of 1.0 would
+// produce a phase of 1.0 in the desired phase units. Let's assume that the desired
+// phase units are microns, then the commands should be scaled such that a command of
+// 1.0 would produce a surface aberration of the DM equal to 1.0 microns at the 
+// actuator position.
+// Then the output of the interaction matrix (the slopes) would be in units of 
+// microns per metres == micro-radians (based on our assumptions here). If one desired "arcseconds"
+// units for slopes, then one can convert (the dimensionless) micro-radians to 
+// arcseconds by the usual `180/PI*3600/1e6`. Building these assumptions into this
+// library assumes the user's intentions, and leaving them out puts the burden on
+// the user to treat their units with care and precision. I'm still not sure if
+// it's a brave choice or a cowardly one, but we decide to assume the user's 
+// *attention* rather than their *intention*.
+//
+// In the example above, we denoted the distance units as metres,
+// but if one assumed different distance units, the resulting interaction matrix
+// would change only in the appropriate way. Let's say that I prefer using the units of
+// [furlongs](https://en.wikipedia.org/wiki/Furlong) (1 furlong ==  201.1680 metres).
+// Then I would have measured my AO system to have the geometry:
+// ```
+// const PITCH: f64 = 9.941e-3;  // furlongs
+// const ALTITUDE: f64 = 49.71;  // furlongs
+// const ACTU_POS: [[f64;2];2] = [
+//     [-4.971e-3, 0.0],  // [x1,y1]
+//     [ 4.971e-3, 0.0],  // [x2,y2]
+// ];
+// const MEAS_POS: [[f64;2];3] = [  // furlongs
+//     [-4.971e-3, -4.971e-3],
+//     [ 0.0,  0.0],
+//     [ 4.971e-3,  4.971e-3],
+// ];
+// ```
+// Replacing the variables in the example above with these ones, I would get my
+// interaction matrix and would be confident that the units of the interaction
+// matrix are "influence function units per furlong per actuator unit"
+// ```txt
+// [[ 73.31 29.32 ]
+//  [ -0.00 -0.00 ]
+//  [ -29.32 -73.31 ]]
+// ```
+// Note that this is exactly the same interaction matrix as before, but scaled by
+// a factor of 201.1680 (metres per furlong).
+// The way to read this is, for example, the gradient of the first influence 
+// function when traced along the first measurement axis is 73.31 units per furlong,
+// or indeed, per YOUR_UNITS where you assumed those units in the definition of
+// the system. The point is, if you are consistent with your inputs, then you can 
+// use any units and the output will comply.
+// 
+// At present, the only influence functions available are the Gaussian one, and
+// "tip-tilt" but this "unit agnosticism" is so attractive that it might as well
+// set the convention for this crate:
+// *where possible, avoid assuming/defining/requiring units*.
 #[derive(Debug)]
 pub struct IMat<'a, T: Sampler, U: Sampleable> {
     /// slice of [Sampler]s defining this interaction matrix
@@ -333,12 +333,13 @@ impl<T: Sampler, U: Sampleable> fmt::Display for IMat<'_, T, U> {
 /// ```
 /// which is the covariance matrix between those measurements. The geometry of
 /// the system is reflected in the values of the matrix - the measurements which
-/// are closer together have a higher covariance. The units follow the same argument
-/// as discussed in the documentation of the [IMat] type, but for this specific
-/// example, we can infer from the comments that the elements of the covariance
-/// matrix have units of "influence function units per distance units"^2, and
-/// assuming that the user expects the influence function to return units of 
-/// microns, then these elements are in units of microrad^2.
+/// are closer together have a higher covariance. 
+// The units follow the same argument
+// as discussed in the documentation of the [IMat] type, but for this specific
+// example, we can infer from the comments that the elements of the covariance
+// matrix have units of "covariance function units per distance units"^2, and
+// assuming that the user expects the influence function to return units of 
+// microns, then these elements are in units of microrad^2.
 #[derive(Debug)]
 pub struct CovMat<'a, T: CoSampleable, L: Sampler, R: Sampler>
 {
