@@ -184,12 +184,11 @@ impl Sampler for Measurement {
                 let point_b = -point_a.clone();
                 Vec2D::linspace(&point_a, &point_b, *npoints)
                 .iter()
-                .map(|p|
+                .flat_map(|p|
                     vec![
                         (central_line + (p + &offset_vec),  coeff),
                         (central_line + (p - &offset_vec), -coeff),
-                    ]
-                ).flatten()
+                    ])
                 .collect()
             },
         }
@@ -208,7 +207,7 @@ pub enum Actuator{
     /// A null actuator, making zero impact on any `Measurement`
     Zero,
     /// A circularly symmetric Gaussian actuator, centred at `position` with
-    /// a specified scalar `sigma`. See [utils::gaussian] for more info.
+    /// a specified scalar `sigma`. See [`utils::gaussian`] for more info.
     Gaussian {
         /// sigma of gaussian function in metres. 
         sigma: f64,
@@ -250,6 +249,7 @@ pub struct VonKarmanLayer {
 
 impl VonKarmanLayer {
     /// Construct a new von Karman turbulence layer from its parameters
+    #[must_use]
     pub fn new(r0: f64, l0: f64, alt: f64) -> VonKarmanLayer {
         VonKarmanLayer {
             r0, l0, alt
@@ -257,11 +257,11 @@ impl VonKarmanLayer {
     }
 }
 
-/// [VonKarmanLayer] is (for now) the prototypical [CoSampleable] object.
+/// [`VonKarmanLayer`] is (for now) the prototypical [`CoSampleable`] object.
 ///
 /// Perhaps confusingly, this implementation allows the cosampling of the
 /// von Karman turbulence statistical model, returning the covariance between
-/// two [Line]s intercepting that layer.
+/// two [`Line`]s intercepting that layer.
 impl CoSampleable for VonKarmanLayer {
     fn cosample(&self, linea: &Line, lineb:&Line) -> f64 {
         let p1 = linea.position_at_altitude(self.alt);
@@ -271,11 +271,49 @@ impl CoSampleable for VonKarmanLayer {
 }
 
 
+pub struct Pupil {
+    pub rad_outer: f64,
+    pub rad_inner: f64,
+    pub spider_thickness: f64,
+    pub spiders: Vec<(Vec2D,Vec2D)>
+}
+
+impl Sampleable for Pupil {
+    fn sample(&self, ell: &Line) -> f64 {
+        let p = ell.position_at_altitude(0.0);
+        let mut out: f64 = 1.0;
+        let r = p.norm();
+        if r > self.rad_outer {
+            out *= 0.0;
+        }
+        if r < self.rad_inner {
+            out *= 0.0;
+        }
+        for spider in &self.spiders {
+            if signed_distance_to_capsule(
+                &p, &spider.0, &spider.1, self.spider_thickness/2.0
+            ) < 0.0 {
+                out *= 0.0;
+            }
+        }
+        out
+    }
+}
+
+fn signed_distance_to_capsule(p: &Vec2D, a: &Vec2D, b: &Vec2D, r: f64) -> f64 {
+    let pa: Vec2D = p - a;
+    let ba: Vec2D = b - a;
+    let mut h: f64 = pa.dot(&ba)/ba.dot(&ba);
+    h = h.clamp(0.0, 1.0);
+    (pa - ba*h).norm() - r
+}
+
+
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::{assert_abs_diff_eq};
+    use approx::assert_abs_diff_eq;
     
     #[test]
     fn gaussian_on_axis_phase() {
@@ -530,5 +568,42 @@ mod tests {
         ];
         let covmat = CovMat::new(&measurements, &measurements, &vk);
         println!("{}", covmat);
+    }
+
+    #[test]
+    fn make_pupil() {
+        let pup = [Pupil{
+            rad_outer: 4.0,
+            rad_inner: 0.5,
+            spider_thickness: 0.1,
+            spiders: vec![
+                (Vec2D::new(-4.0,-4.0),Vec2D::new(3.0,0.0)),
+                (Vec2D::new(-4.0,-4.0),Vec2D::new(3.0,0.0)),
+                (Vec2D::new(-4.0,-4.0),Vec2D::new(3.0,0.0)),
+                (Vec2D::new(-4.0,-4.0),Vec2D::new(3.0,0.0)),
+                ],
+        }];
+        const NPOINTS: u32 = 1000;
+        let x = Vec2D::linspace(
+            &Vec2D::new(-4.0, 0.0),
+            &Vec2D::new(4.0, 0.0),
+            NPOINTS,
+        );
+        let y = Vec2D::linspace(
+            &Vec2D::new(0.0, -4.0),
+            &Vec2D::new(0.0, 4.0),
+            NPOINTS,
+        );
+        println!("{:?}", y);
+        let p: Vec<Measurement> = y.iter().map(|y|
+            x.iter().map(|x| Measurement::Phase{
+                line:Line::new(x.x, 0.0, y.y, 0.0)
+            })).flatten().collect();
+        let pup_vec = IMat::new(&p, &pup);
+        let shape = [NPOINTS as usize, NPOINTS as usize];
+        let data: Vec<f64> = pup_vec.flattened_array();
+        let primary_hdu = fitrs::Hdu::new(&shape, data);
+        fitrs::Fits::create("/tmp/pup.fits", primary_hdu)
+        .expect("Failed to create");
     }
 }

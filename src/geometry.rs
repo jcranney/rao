@@ -53,7 +53,7 @@ impl Vec2D {
     pub fn linspace(a: &Self, b: &Self, npoints: u32) -> Vec<Self> {
         (0..npoints)
         .map(|u| (u as f64 / npoints as f64) + 1.0/ (2.0 * npoints as f64))
-        .map(|t| t*a + (1.0-t)*b)
+        .map(|t| (1.0-t)*a + t*b)
         .collect()
     }
     /// Calculates a [Vec2D] that is rotated by +90 degrees, such that it is
@@ -159,7 +159,7 @@ impl Vec3D {
     /// Return the Euclidean norm of the displacement vector between self
     /// and the intersection of a [Line] at the altitude of self.
     pub fn distance_at_altitude(&self, line: &Line) -> f64 {
-        self.displacement_at_altitude(&line).norm()
+        self.displacement_at_altitude(line).norm()
     }
     /// Return the displacement vector between self
     /// and the intersection of a [Line] at the altitude of self.

@@ -51,7 +51,7 @@ mod tests {
 mod vkcov_approx {
     use std::f64::consts::TAU; // 2 * PI
 
-    const FRONT_TERM: f64 = 0.08583068106228546;
+    const FRONT_TERM: f64 = 0.085_830_681_062_285_46;
 
     pub fn vk_cov(x: f64, r0: f64, l0: f64) -> f64 {
         // computes the rightmost two terms of Eqn (2.24)

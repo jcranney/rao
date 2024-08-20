@@ -81,7 +81,7 @@ pub trait Sampler {
             bundle_right
             .iter()
             .map(|(line_right,coeff_right)| {
-                object.cosample(&line_left,&line_right)*coeff_left*coeff_right
+                object.cosample(line_left,line_right)*coeff_left*coeff_right
             })
             .sum::<f64>()
         }).sum()
