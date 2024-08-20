@@ -62,7 +62,7 @@ mod vkcov_approx {
         (l0 / r0).powf(5.0/3.0) * FRONT_TERM * y
     }
 
-    /// see https://gist.github.com/jcranney/cfb9f1347c31be3c94c9c4be94f0c1af
+    /// see [this gist](https://gist.github.com/jcranney/cfb9f1347c31be3c94c9c4be94f0c1af)
     /// Better Than It Ought To Be approximation
     pub fn btiotb_approx(x: f64) -> f64 {
         1.005_634_9 * (-0.935_996_8 * x).exp() * (1.740_443_6 * x + 1.0) / ( x + 1.0 )

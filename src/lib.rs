@@ -263,9 +263,9 @@ impl VonKarmanLayer {
 /// von Karman turbulence statistical model, returning the covariance between
 /// two [`Line`]s intercepting that layer.
 impl CoSampleable for VonKarmanLayer {
-    fn cosample(&self, linea: &Line, lineb:&Line) -> f64 {
-        let p1 = linea.position_at_altitude(self.alt);
-        let p2 = lineb.position_at_altitude(self.alt);
+    fn cosample(&self, line_a: &Line, line_b:&Line) -> f64 {
+        let p1 = line_a.position_at_altitude(self.alt);
+        let p2 = line_b.position_at_altitude(self.alt);
         utils::vk_cov((p1-p2).norm(), self.r0, self.l0)
     }
 }
@@ -300,12 +300,17 @@ impl Sampleable for Pupil {
     }
 }
 
-fn signed_distance_to_capsule(p: &Vec2D, a: &Vec2D, b: &Vec2D, r: f64) -> f64 {
-    let pa: Vec2D = p - a;
-    let ba: Vec2D = b - a;
+fn signed_distance_to_capsule(
+    position: &Vec2D,
+    capsule_start: &Vec2D,
+    capsule_end: &Vec2D,
+    radius: f64
+) -> f64 {
+    let pa: Vec2D = position - capsule_start;
+    let ba: Vec2D = capsule_end - capsule_start;
     let mut h: f64 = pa.dot(&ba)/ba.dot(&ba);
     h = h.clamp(0.0, 1.0);
-    (pa - ba*h).norm() - r
+    (pa - ba*h).norm() - radius
 }
 
 
