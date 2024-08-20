@@ -7,28 +7,28 @@ use std::fmt;
 // - Sampler (e.g., phase sample, slope measurements)
 
 /// Any type that implements [Sampler] can be used to *sample* a [Sampleable] object
-/// or to *cosample* a [CoSampleable] object.
+/// or to *cosample* a [`CoSampleable`] object.
 ///
-/// A [crate::Measurement] is a typical [Sampler] object, but anything which can provide
-/// a *bundle* of [Line]s via the [Sampler::get_bundle] method is able to implement
+/// A [`crate::Measurement`] is a typical [Sampler] object, but anything which can provide
+/// a *bundle* of [Line]s via the [`Sampler::get_bundle`] method is able to implement
 /// the [Sampler] trait. Other (maybe not useful) implementions could include:
 ///  - range-finding probes, that allow one to find the length of the ray between
 ///    the ground and some element in 3D space.
 ///  - flux-detector, for sampling regions of a [Sampleable] flux field.
 ///  - LGS elongation estimator, sampling the length of the elongated sodium guide
 ///    star along a particular axis, as seen by a partiucular point in the pupil.
-///    Actually, this functionality comes for free in the [crate::Measurement]
+///    Actually, this functionality comes for free in the [`crate::Measurement`]
 ///    variants, but one would need to implement the appropriate [Sampleable] 
 ///    trait for a new `struct SodiumProfile` type.
 pub trait Sampler {
     /// A method which takes a principle line and returns a vector of lines
     /// and coefficients, each of which specify the weight that the samples are
     /// linearly combined with to form a single sample. See, for example, 
-    /// [crate::Measurement::get_bundle].
+    /// [`crate::Measurement::get_bundle`].
     fn get_bundle(&self) -> Vec<(Line,f64)>;
     
     /// A method to sample a [Sampleable] object with the bundle of lines returned
-    /// by [Sampler::get_bundle].
+    /// by [`Sampler::get_bundle`].
     ///
     /// Iterates over Vec<(Line,f64)>, samples the [Sampleable] function the each
     /// lines, and then linearly combines those samples with the float coefficient.
@@ -48,18 +48,18 @@ pub trait Sampler {
         ).sum()
     }
     
-    /// Similar to [Sampler::sample] but *co-samples* a [CoSampleable] function 
+    /// Similar to [`Sampler::sample`] but *co-samples* a [`CoSampleable`] function 
     /// with a pair of [Sampler]s.
     /// 
     /// Note crucially that the two [Sampler]s do not themselves need to be the
     /// same type, they only need to both implement the [Sampler] trait. E.g., 
     /// in building a covariance matrix (a covariance function makes sense as a 
-    /// a [CoSampleable] type), one can meaningfully have cross-terms in the
+    /// a [`CoSampleable`] type), one can meaningfully have cross-terms in the
     /// covariance matrix which correspond to the covariance between 
     /// slope-measurements and phase measurements.
     ///
     /// This method does nested iterations of the bundles returned by each 
-    /// [Sampler::get_bundle] method, and co-samples a [CoSampleable] function 
+    /// [`Sampler::get_bundle`] method, and co-samples a [`CoSampleable`] function 
     /// with each line-pair. Then, *quadratically* combined according to the 
     /// product of the co-sampled function and the two float coefficients.
     ///
@@ -91,43 +91,43 @@ pub trait Sampler {
 /// Trait to enable a type to be sampled by a [Sampler].
 ///
 /// The only requirement for this trait is that the type implements the
-/// [Sampleable::sample] method.
+/// [`Sampleable::sample`] method.
 pub trait Sampleable {
-    /// takes the object itself and a [crate::Line], and returns a scalar float.
+    /// takes the object itself and a [`crate::Line`], and returns a scalar float.
     fn sample(&self, p: &Line) -> f64;
 }
 
 /// Trait to enable a type to be cosampled by a pair of [Sampler]s
 ///
 /// The only requirement for this trait is that the type implements the
-/// [CoSampleable::cosample] method.
+/// [`CoSampleable::cosample`] method.
 pub trait CoSampleable {
-    /// takes the object itself and two [crate::Line]s, and returns a scalar float.
+    /// takes the object itself and two [`crate::Line`]s, and returns a scalar float.
     fn cosample(&self, p: &Line, q: &Line) -> f64;
 }
 
 /// Generalised interaction matrix between [Sampler] and [Sampleable].
 /// 
-/// The interaction matrix ([IMat]) is the interface between any object that
+/// The interaction matrix ([`IMat`]) is the interface between any object that
 /// implements [Sampler] (e.g., a measurement) and another object that implements
 /// [Sampleable] (e.g., an actuator).
-/// Specifically, the [IMat] has elements which are equal to the
+/// Specifically, the [`IMat`] has elements which are equal to the
 /// sampled value of each [Sampleable] object when sampled by a [Sampler].
 /// # Examples
 /// Let's assume we have:
-///  - Two [crate::Actuator]s, with Gaussian influence functions, located at `(x, y)`:
+///  - Two [`crate::Actuator`]s, with Gaussian influence functions, located at `(x, y)`:
 ///    - `(+1.0, 0.0)` metres,
 ///    - `(-1.0, 0.0)` metres, 
 ///
 ///    on a deformable mirror conjugated to 10 km in altitude, and with a coupling
 ///    of 0.4 at a pitch of 2.0 metres.
-///  - Three [crate::Measurement]s, measuring the y-slope on-axis, at projected pupil
+///  - Three [`crate::Measurement`]s, measuring the y-slope on-axis, at projected pupil
 ///    positions of `(x, y)`:
 ///    - `(-1.0, -1.0)`
 ///    - `( 0.0,  0.0)`
 ///    - `(+1.0, +1.0)`
 /// We construct those measurements and actuators, then we can build an imat from
-/// them (since [crate::Measurement] implements [Sampler] and [crate::Actuator] 
+/// them (since [`crate::Measurement`] implements [Sampler] and [`crate::Actuator`] 
 /// implements [Sampleable]). Finally, we can print the elements of that imat:
 /// ```
 /// const PITCH: f64 = 2.0;  // metres
@@ -255,7 +255,7 @@ pub struct IMat<'a, T: Sampler, U: Sampleable> {
 }
 
 impl<'a, T: Sampler, U: Sampleable> IMat<'a, T, U>{
-    /// Define a new [IMat] with [Sampler]s and [Sampleable]s. This function
+    /// Define a new [`IMat`] with [Sampler]s and [Sampleable]s. This function
     /// is *lazy*, and the actual computation of the interaction matrix
     /// only happens when the elements of that matrix are requested (and happens
     /// every time they are requested).
@@ -291,12 +291,12 @@ impl<T: Sampler, U: Sampleable> fmt::Display for IMat<'_, T, U> {
 /// Generalised covariance matrix between two [Sampler]s.
 ///
 /// Given two slices of [Sampler]s (`samplers_left` and `samplers_right`) and a
-/// [CoSampleable] object, the [CovMat] is the set of cosamples of that object 
+/// [`CoSampleable`] object, the [`CovMat`] is the set of cosamples of that object 
 /// by all pairs of elements between `samplers_left` and `samplers_right`.
 ///
-/// The naming, (*CovMat*, *cov_model*, etc.) comes from the prototypical
+/// The naming, (*`CovMat`*, *`cov_model`*, etc.) comes from the prototypical
 /// example of this object: the covariance matrix between measurements of an 
-/// AO system. Taking the example from [IMat], we additionally define a covariance
+/// AO system. Taking the example from [`IMat`], we additionally define a covariance
 /// model:
 /// ```
 /// const PITCH: f64 = 2.0;  // metres
@@ -355,14 +355,14 @@ pub struct CovMat<'a, T: CoSampleable, L: Sampler, R: Sampler>
     pub samplers_right: &'a [R],
     /// Covariance model to be cosampled,
     ///
-    /// Must implement the [CoSampleable] trait.
+    /// Must implement the [`CoSampleable`] trait.
     pub cov_model: &'a T,
 }
 
 impl<'a, T: CoSampleable, L: Sampler, R: Sampler> CovMat<'a, T, L, R> {
-    /// Construct a new [CovMat] given the defining properties.
+    /// Construct a new [`CovMat`] given the defining properties.
     ///
-    /// This function is *lazy* and the evaluation of the [CovMat] elements
+    /// This function is *lazy* and the evaluation of the [`CovMat`] elements
     /// only happens when they are requested (and happens *every* time they
     /// are requested).
     pub fn new(

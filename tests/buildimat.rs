@@ -6,7 +6,7 @@ use std::time;
 #[test]
 fn phase_gaussian() {
     let actuators: Vec<rao::Actuator> = (0..1000)
-    .map(|idx| idx as f64 * 0.2)
+    .map(|idx| f64::from(idx) * 0.2)
     .map(|posx|
         Actuator::Gaussian{
             sigma: coupling_to_sigma(0.5,1.0),
@@ -15,7 +15,7 @@ fn phase_gaussian() {
     ).collect();
     
     let measurements: Vec<rao::Measurement> = (0..1000)
-    .map(|idx| idx as f64 * 0.2)
+    .map(|idx| f64::from(idx) * 0.2)
     .map(|posx|
         Measurement::Phase{
             line: Line::new(posx, 0.0, 0.0, 0.0)
@@ -32,7 +32,7 @@ fn phase_gaussian() {
 #[test]
 fn edgeslope_gaussian() {
     let actuators: Vec<rao::Actuator> = (0..100)
-    .map(|idx| idx as f64 * 0.2)
+    .map(|idx| f64::from(idx) * 0.2)
     .map(|posx|
         Actuator::Gaussian{
             sigma: coupling_to_sigma(0.5,1.0),
@@ -41,7 +41,7 @@ fn edgeslope_gaussian() {
     ).collect();
     
     let measurements: Vec<rao::Measurement> = (0..100)
-    .map(|idx| idx as f64 * 0.2)
+    .map(|idx| f64::from(idx) * 0.2)
     .map(|posx|
         Measurement::SlopeTwoEdge{
             central_line: Line::new(posx, 0.0, 0.0, 0.0),
@@ -67,14 +67,14 @@ fn imat_and_cov() {
     (0..100)
     .map(|x| Actuator::Gaussian {
         sigma: coupling_to_sigma(0.5, 0.2),
-        position: Vec3D::new(x as f64 * 0.2 + 0.1, 0.0, 0.0),
+        position: Vec3D::new(f64::from(x) * 0.2 + 0.1, 0.0, 0.0),
     }).collect();
     
     let measurements: Vec<Measurement> = 
     (0..100)
     .map(|x| Measurement::SlopeTwoLine {
-            line_pos: Line::new_on_axis(x as f64 * 0.2 + 0.1, 0.0),
-            line_neg: Line::new_on_axis(x as f64 * 0.2 - 0.1, 0.0),
+            line_pos: Line::new_on_axis(f64::from(x) * 0.2 + 0.1, 0.0),
+            line_neg: Line::new_on_axis(f64::from(x) * 0.2 - 0.1, 0.0),
     }).collect();
     
     // Build the covmat:

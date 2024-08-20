@@ -136,7 +136,7 @@ pub enum Measurement{
     ///  - *etc*
     ///
     /// This is not the typical "linspace", which is ill-defined for 1 point, though one
-    /// could implement that as a [Sampler] wrapper around [Measurement::SlopeTwoLine].
+    /// could implement that as a [Sampler] wrapper around [`Measurement::SlopeTwoLine`].
     SlopeTwoEdge {
         /// Principle axis of the WFS
         central_line: Line,
@@ -153,16 +153,16 @@ pub enum Measurement{
 
 /// [Measurement] is the prototypical [Sampler] type.
 impl Sampler for Measurement {
-    /// The [Sampler::get_bundle] method implementation for the [Measurement] variants
+    /// The [`Sampler::get_bundle`] method implementation for the [Measurement] variants
     /// should serve as an example for implementing other [Sampler] types. Inspect the
     /// source code for the reference implementation. In short:
-    ///  - a [Measurement::Zero] variant returns an empty vector,
-    ///  - a [Measurement::Phase] variant returns a single line with a coefficient of `1.0`,
-    ///  - a [Measurement::SlopeTwoLine] variant returns two lines, with a positive
+    ///  - a [`Measurement::Zero`] variant returns an empty vector,
+    ///  - a [`Measurement::Phase`] variant returns a single line with a coefficient of `1.0`,
+    ///  - a [`Measurement::SlopeTwoLine`] variant returns two lines, with a positive
     ///    and negative coefficient (for the *start* and *end* of the slope), scaled by
     ///    the inverse of the ground separation of the lines, so that the resulting units
     ///    are in *sampled function units per distance unit*.
-    ///  - a [Measurement::SlopeTwoEdge] variant returns `2 * npoints` lines, consisting of
+    ///  - a [`Measurement::SlopeTwoEdge`] variant returns `2 * npoints` lines, consisting of
     ///    `npoints` positive coefficients, and `npoints` negative coefficients, each scaled
     ///    by the inverse of the ground-layer separation and a factor of `1.0 / npoints as f64`,
     ///    in order to get a result which is in units of *sampled function units per distance unit*. 
@@ -178,7 +178,7 @@ impl Sampler for Measurement {
                 ]
             },
             Measurement::SlopeTwoEdge{central_line, edge_length, edge_separation, gradient_axis, npoints} => {
-                let coeff = (1.0 / *npoints as f64) / edge_separation;
+                let coeff = (1.0 / f64::from(*npoints)) / edge_separation;
                 let offset_vec = gradient_axis * edge_separation * 0.5;
                 let point_a =  edge_length * 0.5 * gradient_axis.ortho();
                 let point_b = -point_a.clone();
@@ -521,7 +521,7 @@ mod tests {
         let line = Line::new_on_axis(0.0,0.0);
         let a = vk.cosample(&line, &line);
         assert_abs_diff_eq!(a,utils::vk_cov(0.0, vk.r0, vk.l0));
-        assert_abs_diff_eq!(a,856.3466131373517,epsilon=1e-3);
+        assert_abs_diff_eq!(a,856.346_613_137_351_7,epsilon=1e-3);
     }
 
     #[test]
@@ -532,14 +532,14 @@ mod tests {
             alt: 1000.0,
         };
         let measurements: Vec<Measurement> = (0..10)
-        .map(|i| i as f64 * 0.8)
+        .map(|i| f64::from(i) * 0.8)
         .map(|x|
             Measurement::Phase{
                 line: Line::new_on_axis(x, 0.0)
             }
         ).collect();
         let covmat = CovMat::new(&measurements,&measurements,&vk);
-        println!("{}", covmat);
+        println!("{covmat}");
     }
     
     #[test]
@@ -567,7 +567,7 @@ mod tests {
             },
         ];
         let covmat = CovMat::new(&measurements, &measurements, &vk);
-        println!("{}", covmat);
+        println!("{covmat}");
     }
 
     #[test]
@@ -594,11 +594,11 @@ mod tests {
             &Vec2D::new(0.0, 4.0),
             NPOINTS,
         );
-        println!("{:?}", y);
-        let p: Vec<Measurement> = y.iter().map(|y|
+        println!("{y:?}");
+        let p: Vec<Measurement> = y.iter().flat_map(|y|
             x.iter().map(|x| Measurement::Phase{
                 line:Line::new(x.x, 0.0, y.y, 0.0)
-            })).flatten().collect();
+            })).collect();
         let pup_vec = IMat::new(&p, &pup);
         let shape = [NPOINTS as usize, NPOINTS as usize];
         let data: Vec<f64> = pup_vec.flattened_array();

@@ -1,4 +1,4 @@
-use rao::*;
+use rao::{Actuator, IMat, Line, Matrix, Measurement, Vec2D, Vec3D, coupling_to_sigma};
 use fitrs::{Hdu,Fits};
 
 fn main() {
@@ -8,10 +8,10 @@ fn main() {
     
     // build list of actuators
     let mut actuators: Vec<Actuator> = vec![];
-    for i in 0..(N_SUBX+1) {
-        for j in 0..(N_SUBX+1) {
-            let x = ((j as f64) - (N_SUBX/2) as f64)*PITCH;
-            let y = ((i as f64) - (N_SUBX/2) as f64)*PITCH;
+    for i in 0..=N_SUBX {
+        for j in 0..=N_SUBX {
+            let x = (f64::from(j) - f64::from(N_SUBX/2))*PITCH;
+            let y = (f64::from(i) - f64::from(N_SUBX/2))*PITCH;
             actuators.push(
                 // Gaussian influence functions
                 Actuator::Gaussian{
@@ -28,8 +28,8 @@ fn main() {
     let mut measurements: Vec<Measurement> = vec![];
     for i in 0..N_SUBX {
         for j in 0..N_SUBX {
-            let x0 = (j as f64 - (N_SUBX/2) as f64 + 0.5)*PITCH;
-            let y0 = (i as f64 - (N_SUBX/2) as f64 + 0.5)*PITCH;
+            let x0 = (f64::from(j) - f64::from(N_SUBX/2) + 0.5)*PITCH;
+            let y0 = (f64::from(i) - f64::from(N_SUBX/2) + 0.5)*PITCH;
             let xz = 0.0;  // angular x-component (radians)
             let yz = 0.0;  // angular y-compenent (radians)
             // define the line that the subaperture looks through:

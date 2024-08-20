@@ -1,4 +1,4 @@
-use rao::*;
+use rao::{Actuator, CovMat, IMat, Line, Matrix, Measurement, Vec2D, Vec3D, VonKarmanLayer, coupling_to_sigma};
 use fitrs::{Fits, Hdu};
 
 fn main() {

@@ -25,40 +25,40 @@ pub struct Vec2D {
 }
 
 impl Vec2D {
-    /// Create a new [Vec2D] from the coordinates in the transverse plane.
-    pub fn new(x: f64, y: f64) -> Self {
+    /// Create a new [`Vec2D`] from the coordinates in the transverse plane.
+    #[must_use] pub fn new(x: f64, y: f64) -> Self {
         Self {x,y}
     }
     /// create a unit vector along x-axis.
-    pub fn x_unit() -> Self {
+    #[must_use] pub fn x_unit() -> Self {
         Self {x:1.0, y:0.0}
     }
     /// create a unit vector along y-axis.
-    pub fn y_unit() -> Self {
+    #[must_use] pub fn y_unit() -> Self {
         Self {x:0.0, y:1.0}
     }
-    /// return the (Euclidean) norm of the [Vec2D].
-    pub fn norm(&self) -> f64 {
+    /// return the (Euclidean) norm of the [`Vec2D`].
+    #[must_use] pub fn norm(&self) -> f64 {
         self.norm2().powf(0.5)
     }
-    /// return the (Euclidean) squared-norm of the [Vec2D].
-    pub fn norm2(&self) -> f64 {
+    /// return the (Euclidean) squared-norm of the [`Vec2D`].
+    #[must_use] pub fn norm2(&self) -> f64 {
         self.x.powf(2.0)+self.y.powf(2.0)
     }
-    /// return the dot (inner) product of the [Vec2D] with another (borrowed) [Vec2D].
-    pub fn dot(&self, other: &Self) -> f64 {
+    /// return the dot (inner) product of the [`Vec2D`] with another (borrowed) [`Vec2D`].
+    #[must_use] pub fn dot(&self, other: &Self) -> f64 {
         self.x*other.x+self.y*other.y
     }
-    /// Calculate a uniformly spaced set of points between two [Vec2D]s.
-    pub fn linspace(a: &Self, b: &Self, npoints: u32) -> Vec<Self> {
+    /// Calculate a uniformly spaced set of points between two [`Vec2D`]s.
+    #[must_use] pub fn linspace(a: &Self, b: &Self, npoints: u32) -> Vec<Self> {
         (0..npoints)
-        .map(|u| (u as f64 / npoints as f64) + 1.0/ (2.0 * npoints as f64))
+        .map(|u| (f64::from(u) / f64::from(npoints)) + 1.0/ (2.0 * f64::from(npoints)))
         .map(|t| (1.0-t)*a + t*b)
         .collect()
     }
-    /// Calculates a [Vec2D] that is rotated by +90 degrees, such that it is
-    /// orthogonal to the input [Vec2D].
-    pub fn ortho(&self) -> Self {
+    /// Calculates a [`Vec2D`] that is rotated by +90 degrees, such that it is
+    /// orthogonal to the input [`Vec2D`].
+    #[must_use] pub fn ortho(&self) -> Self {
         Self {
             x: -self.y,
             y: self.x
@@ -148,22 +148,22 @@ pub struct Vec3D {
 }
 
 impl Vec3D {
-    /// Create a new [Vec3D] from a 3D coordinate.
-    pub fn new(x: f64, y: f64, z: f64) -> Self {
+    /// Create a new [`Vec3D`] from a 3D coordinate.
+    #[must_use] pub fn new(x: f64, y: f64, z: f64) -> Self {
         Self {x,y,z}
     }
-    /// Convenience function for creating a [Vec3D] at the origin.
-    pub fn origin() -> Self {
+    /// Convenience function for creating a [`Vec3D`] at the origin.
+    #[must_use] pub fn origin() -> Self {
         Self {x:0.0, y:0.0, z: 0.0}
     }
     /// Return the Euclidean norm of the displacement vector between self
     /// and the intersection of a [Line] at the altitude of self.
-    pub fn distance_at_altitude(&self, line: &Line) -> f64 {
+    #[must_use] pub fn distance_at_altitude(&self, line: &Line) -> f64 {
         self.displacement_at_altitude(line).norm()
     }
     /// Return the displacement vector between self
     /// and the intersection of a [Line] at the altitude of self.
-    pub fn displacement_at_altitude(&self, line: &Line) -> Vec2D {
+    #[must_use] pub fn displacement_at_altitude(&self, line: &Line) -> Vec2D {
         let line_intersection = line.position_at_altitude(self.z);
         Vec2D{
             x: (line_intersection.x - self.x),
@@ -198,30 +198,30 @@ pub struct Line {
 
 impl Line {
     /// Constructor for a new [Line].
-    pub fn new(x0: f64, xz: f64, y0: f64, yz: f64) -> Line {
+    #[must_use] pub fn new(x0: f64, xz: f64, y0: f64, yz: f64) -> Line {
         Line {x0,xz,y0,yz}
     }
     /// Convenience function for [Line]s that do not depend on z
-    pub fn new_on_axis(x0: f64, y0: f64) -> Line {
+    #[must_use] pub fn new_on_axis(x0: f64, y0: f64) -> Line {
         Line::new(x0, 0.0, y0, 0.0)
     }
     /// Convenience function for defining a [Line] given two points
     /// in 3D. Results in singularities if a.z == b.z, otherwise is 
     /// gauaranteed to be stable.
-    pub fn new_from_two_points(a: &Vec3D, b: &Vec3D) -> Line {
+    #[must_use] pub fn new_from_two_points(a: &Vec3D, b: &Vec3D) -> Line {
         let xz = (b.x - a.x)/(b.z - a.z);
         let yz = (b.y - a.y)/(b.z - a.z);
         let x0 = a.x - (a.z)/(b.z-a.z)*(b.x-a.x);
         let y0 = a.y - (a.z)/(b.z-a.z)*(b.y-a.y);
         Line::new(x0,xz,y0,yz)
     }
-    /// Calculate the [Vec2D] coordinates in the transverse plane at
+    /// Calculate the [`Vec2D`] coordinates in the transverse plane at
     /// a specified altitude.
-    pub fn position_at_altitude(&self, alt: f64) -> Vec2D {
+    #[must_use] pub fn position_at_altitude(&self, alt: f64) -> Vec2D {
         Vec2D::new(alt*self.xz + self.x0, alt*self.yz + self.y0)
     }
     
-    pub fn distance_at_ground(&self, other: &Line) -> f64 {
+    #[must_use] pub fn distance_at_ground(&self, other: &Line) -> f64 {
         Vec2D::new(self.x0 - other.x0, self.y0 - other.y0).norm()
     }
 }
