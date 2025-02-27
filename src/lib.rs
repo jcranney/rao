@@ -271,6 +271,7 @@ impl CoSampleable for VonKarmanLayer {
 }
 
 
+#[derive(Clone)]
 pub struct Pupil {
     pub rad_outer: f64,
     pub rad_inner: f64,
