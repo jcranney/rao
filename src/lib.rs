@@ -135,7 +135,7 @@ pub enum Measurement{
     ///  - `npoints=3` => `[-x--x--x-]`,
     ///  - *etc*
     ///
-    /// This is not the typical "linspace", which is ill-defined for 1 point, though one
+    /// This is not a typical "linspace", which is ill-defined for 1 point, though one
     /// could implement that as a [Sampler] wrapper around [`Measurement::SlopeTwoLine`].
     SlopeTwoEdge {
         /// Principle axis of the WFS
@@ -182,7 +182,7 @@ impl Sampler for Measurement {
                 let offset_vec = gradient_axis * edge_separation * 0.5;
                 let point_a =  edge_length * 0.5 * gradient_axis.ortho();
                 let point_b = -point_a.clone();
-                Vec2D::linspace(&point_a, &point_b, *npoints)
+                Vec2D::linspread(&point_a, &point_b, *npoints)
                 .iter()
                 .flat_map(|p|
                     vec![
@@ -590,12 +590,12 @@ mod tests {
                 ],
         }];
         const NPOINTS: u32 = 1000;
-        let x = Vec2D::linspace(
+        let x = Vec2D::linspread(
             &Vec2D::new(-4.0, 0.0),
             &Vec2D::new(4.0, 0.0),
             NPOINTS,
         );
-        let y = Vec2D::linspace(
+        let y = Vec2D::linspread(
             &Vec2D::new(0.0, -4.0),
             &Vec2D::new(0.0, 4.0),
             NPOINTS,

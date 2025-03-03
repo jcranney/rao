@@ -49,8 +49,22 @@ impl Vec2D {
     #[must_use] pub fn dot(&self, other: &Self) -> f64 {
         self.x*other.x+self.y*other.y
     }
-    /// Calculate a uniformly spaced set of points between two [`Vec2D`]s.
+    /// Calculate a uniformly spaced set of points between two [`Vec2D`]s, 
+    /// including the specified endpoints
     #[must_use] pub fn linspace(a: &Self, b: &Self, npoints: u32) -> Vec<Self> {
+        match npoints {
+            0 => vec![],
+            1 => vec![a.clone()],
+            _ => {
+                (0..npoints)
+                .map(|u| (f64::from(u) / (f64::from(npoints)-1.0)))
+                .map(|t| (1.0-t)*a + t*b)
+                .collect()
+            }
+        }
+    }
+    /// Calculate the centre of equal sized intervals between two [`Vec2D`]s
+    #[must_use] pub fn linspread(a: &Self, b: &Self, npoints: u32) -> Vec<Self> {
         (0..npoints)
         .map(|u| (f64::from(u) / f64::from(npoints)) + 1.0/ (2.0 * f64::from(npoints)))
         .map(|t| (1.0-t)*a + t*b)
@@ -233,12 +247,27 @@ mod tests {
     use approx::{assert_abs_diff_eq};
 
     #[test]
+    fn linspread() {
+        let a = Vec2D::new(0.0,3.0);
+        let b = Vec2D::new(3.0,0.0);
+        let ls = Vec2D::linspread(&a,&b,3);
+        assert_abs_diff_eq!(ls[0].x, 0.5);
+        assert_abs_diff_eq!(ls[0].y, 2.5);
+        assert_abs_diff_eq!(ls[1].x, 1.5);
+        assert_abs_diff_eq!(ls[1].y, 1.5);
+        assert_abs_diff_eq!(ls[2].x, 2.5);
+        assert_abs_diff_eq!(ls[2].y, 0.5);
+    }
+
+    #[test]
     fn linspace() {
         let a = Vec2D::new(1.0,2.0);
-        let b = Vec2D::new(3.0,0.0);
+        let b = Vec2D::new(4.0,0.0);
         let ls = Vec2D::linspace(&a,&b,3);
-        assert_abs_diff_eq!(ls[1].x, 2.0);
+        assert_abs_diff_eq!(ls[1].x, 2.5);
         assert_abs_diff_eq!(ls[1].y, 1.0);
+        assert_eq!(ls[0], a);
+        assert_eq!(ls[2], b);
     }
 
     #[test]
