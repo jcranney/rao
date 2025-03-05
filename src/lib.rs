@@ -38,6 +38,7 @@
 //!             edge_length: PITCH,
 //!             npoints: 5,
 //!             gradient_axis: rao::Vec2D::x_unit(),
+//!             altitude: f64::INFINITY,
 //!         });
 //!         // y-slope
 //!         measurements.push(rao::Measurement::SlopeTwoEdge{
@@ -46,6 +47,7 @@
 //!             edge_length: PITCH,
 //!             npoints: 5,
 //!             gradient_axis: rao::Vec2D::y_unit(),
+//!             altitude: f64::INFINITY,
 //!         });
 //!     }
 //! }
@@ -148,6 +150,8 @@ pub enum Measurement{
         gradient_axis: Vec2D,
         /// Number of points to sample along each edge (more points can be more accurate).
         npoints: u32,
+        /// Altitude of target to raytrace through to.
+        altitude: f64,
     },
 }
 
@@ -177,19 +181,51 @@ impl Sampler for Measurement {
                     (line_neg.clone(), -coeff),
                 ]
             },
-            Measurement::SlopeTwoEdge{central_line, edge_length, edge_separation, gradient_axis, npoints} => {
+            Measurement::SlopeTwoEdge{central_line, edge_length, edge_separation, gradient_axis, npoints, altitude} => {
                 let coeff = (1.0 / f64::from(*npoints)) / edge_separation;
                 let offset_vec = gradient_axis * edge_separation * 0.5;
                 let point_a =  edge_length * 0.5 * gradient_axis.ortho();
                 let point_b = -point_a.clone();
-                Vec2D::linspread(&point_a, &point_b, *npoints)
-                .iter()
-                .flat_map(|p|
-                    vec![
-                        (central_line + (p + &offset_vec),  coeff),
-                        (central_line + (p - &offset_vec), -coeff),
-                    ])
-                .collect()
+                match *altitude {
+                    f64::INFINITY => {
+                        Vec2D::linspread(&point_a, &point_b, *npoints)
+                        .iter()
+                        .flat_map(|p|
+                            vec![
+                                (
+                                    central_line + (p + &offset_vec),
+                                    coeff
+                                ),
+                                (
+                                    central_line + (p - &offset_vec),
+                                    -coeff
+                                ),
+                            ])
+                        .collect()
+                    },
+                    altitude => {
+                        Vec2D::linspread(&point_a, &point_b, *npoints)
+                        .iter()
+                        .flat_map(|p|
+                            vec![
+                                (
+                                    Line::new_from_two_points(
+                                        &((central_line + (p + &offset_vec)).position_at_altitude(0.0) + Vec3D::origin()),
+                                        &(central_line.position_at_altitude(altitude) + Vec3D::new(0.0, 0.0, altitude)),
+                                    ),
+                                    coeff
+                                ),
+                                (
+                                    Line::new_from_two_points(
+                                        &((central_line + (p - &offset_vec)).position_at_altitude(0.0) + Vec3D::origin()),
+                                        &(central_line.position_at_altitude(altitude) + Vec3D::new(0.0, 0.0, altitude)),
+                                    ),
+                                    -coeff
+                                ),
+                            ])
+                        .collect()
+                    }
+                }
             },
         }
     }
@@ -318,6 +354,8 @@ fn signed_distance_to_capsule(
 
 #[cfg(test)]
 mod tests {
+    use std::f64;
+
     use super::*;
     use approx::assert_abs_diff_eq;
     
@@ -456,7 +494,8 @@ mod tests {
                 edge_length: 0.0,
                 edge_separation: 2e-2,
                 gradient_axis: Vec2D::x_unit(),
-                npoints: 100
+                npoints: 100,
+                altitude: f64::INFINITY,
             }
         ];
         let imat = IMat::new(&measurements, &actuators);
@@ -570,6 +609,7 @@ mod tests {
                 edge_length: 0.2,
                 gradient_axis: Vec2D::x_unit(),
                 npoints: 10,
+                altitude: f64::INFINITY,
             },
         ];
         let covmat = CovMat::new(&measurements, &measurements, &vk);

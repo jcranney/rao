@@ -1,3 +1,5 @@
+use core::f64;
+
 use rao::{Actuator, IMat, Line, Matrix, Measurement, Vec2D, Vec3D, coupling_to_sigma};
 use fitrs::{Hdu,Fits};
 
@@ -45,6 +47,7 @@ fn main() {
                 npoints: 5,
                 // desired axis of slope measurement
                 gradient_axis: Vec2D::x_unit(),
+                altitude: f64::INFINITY,
             });
             // same, but for y-axis slope:
             measurements.push(Measurement::SlopeTwoEdge{
@@ -55,6 +58,7 @@ fn main() {
                 npoints: 5,
                 // desired axis of slope measurement
                 gradient_axis: Vec2D::y_unit(),
+                altitude: f64::INFINITY,
             });
         }
     }

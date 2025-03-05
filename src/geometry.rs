@@ -244,7 +244,7 @@ impl Line {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::{assert_abs_diff_eq};
+    use approx::assert_abs_diff_eq;
 
     #[test]
     fn linspread() {

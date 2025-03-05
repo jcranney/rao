@@ -1,5 +1,6 @@
 use rao::*;
 use fitrs::{Fits, Hdu};
+use core::f64;
 use std::time;
 
 
@@ -49,6 +50,7 @@ fn edgeslope_gaussian() {
             edge_length: 0.2,
             npoints: 5,
             gradient_axis: Vec2D::x_unit(),
+            altitude: f64::INFINITY,
         }
     ).collect();
 

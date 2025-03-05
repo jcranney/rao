@@ -1,3 +1,5 @@
+use core::f64;
+
 use rao::{Actuator, CovMat, IMat, Line, Matrix, Measurement, Vec2D, Vec3D, VonKarmanLayer, coupling_to_sigma};
 use fitrs::{Fits, Hdu};
 
@@ -49,6 +51,7 @@ fn main() {
                     edge_length: WFSPITCH,
                     npoints: 2,
                     gradient_axis: Vec2D::x_unit(),
+                    altitude: f64::INFINITY,
                 };
                 slope_measurements[idx+NSUBX*NSUBX] = Measurement::SlopeTwoEdge{
                     central_line: line.clone(),
@@ -56,6 +59,7 @@ fn main() {
                     edge_length: WFSPITCH,
                     npoints: 2,
                     gradient_axis: Vec2D::y_unit(),
+                    altitude: f64::INFINITY,
                 };
                 idx += 1;
             }
