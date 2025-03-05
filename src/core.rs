@@ -126,6 +126,7 @@ pub trait CoSampleable {
 ///    - `(-1.0, -1.0)`
 ///    - `( 0.0,  0.0)`
 ///    - `(+1.0, +1.0)`
+/// 
 /// We construct those measurements and actuators, then we can build an imat from
 /// them (since [`crate::Measurement`] implements [Sampler] and [`crate::Actuator`] 
 /// implements [Sampleable]). Finally, we can print the elements of that imat:
