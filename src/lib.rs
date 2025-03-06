@@ -103,7 +103,7 @@ pub use crate::core::{
 /// A [Measurement] provides a scalar-valued sample of an AO system. A single
 /// measurement device (e.g., a Shack Hartmann WFS) is typically comprised of 
 /// many [Measurement]s, e.g., `&[Measurement; N]`.
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub enum Measurement{
     /// The null measurement, always returning 0.0 regardless of the measured object.
     Zero,
@@ -239,7 +239,7 @@ impl Sampler for Measurement {
 /// An [Actuator]'s state is defined by a scalar value, so a device with `N`
 /// actuatable degrees of freedom is considered as `N` different [Actuator]s,
 /// e.g., `&[Actuator; N]`.
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub enum Actuator{
     /// A null actuator, making zero impact on any `Measurement`
     Zero,
@@ -278,6 +278,7 @@ impl Sampleable for Actuator {
 }
 
 /// Simple covariance model, this might be refactored into an enum of models.
+#[derive(Debug,Clone)]
 pub struct VonKarmanLayer {
     pub r0: f64,
     pub l0: f64,
@@ -308,7 +309,7 @@ impl CoSampleable for VonKarmanLayer {
 }
 
 
-#[derive(Clone)]
+#[derive(Debug,Clone)]
 pub struct Pupil {
     pub rad_outer: f64,
     pub rad_inner: f64,

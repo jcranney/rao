@@ -1,6 +1,6 @@
 [package]
 name = "rao"
-version = "0.1.6"
+version = "0.1.7"
 authors = ["Jesse Cranney <jesse.cranney@anu.edu.au>"]
 edition = "2021"
 description = "Robust and scalable Adaptive Optics tools"
