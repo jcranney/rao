@@ -206,23 +206,24 @@ impl Sampler for Measurement {
                     altitude => {
                         Vec2D::linspread(&point_a, &point_b, *npoints)
                         .iter()
-                        .flat_map(|p|
+                        .flat_map(|p| {
+                            let p_alt = Vec3D::new(central_line.xz*altitude, central_line.yz*altitude, altitude);
                             vec![
                                 (
                                     Line::new_from_two_points(
                                         &((central_line + (p + &offset_vec)).position_at_altitude(0.0) + Vec3D::origin()),
-                                        &(central_line.position_at_altitude(altitude) + Vec3D::new(0.0, 0.0, altitude)),
+                                        &p_alt,
                                     ),
                                     coeff
                                 ),
                                 (
                                     Line::new_from_two_points(
                                         &((central_line + (p - &offset_vec)).position_at_altitude(0.0) + Vec3D::origin()),
-                                        &(central_line.position_at_altitude(altitude) + Vec3D::new(0.0, 0.0, altitude)),
+                                        &p_alt,
                                     ),
                                     -coeff
                                 ),
-                            ])
+                            ]})
                         .collect()
                     }
                 }
