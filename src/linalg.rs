@@ -54,4 +54,14 @@ pub trait Matrix {
         write!(f, "]")?;
         Ok(())
     }
+
+    /// sample the matrix at specified entries (e.g., for efficient sparse
+    /// operations). Note that the matrix elements are only evaluated where 
+    /// the matrix is sampled.
+    fn samples(&self, indices: Vec<(usize, usize)>) -> Vec<f64>  where Self:Sync {
+        indices.into_par_iter()
+        .map(|(row_index, col_index)|
+            self.eval(row_index, col_index)
+        ).collect()
+    }
 }
