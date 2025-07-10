@@ -86,7 +86,7 @@ fn main() {
     .expect("Failed to create");
 
     println!("creating cmm (meas<->meas)");
-    let mat = CovMat::new(&slope_measurements, &slope_measurements, &cov);
+    let mat = CovMat::new(&slope_measurements, &slope_measurements, &cov, 0.0);
     let shape = [mat.ncols(), mat.nrows()];
     let data: Vec<f64> = mat.flattened_array();
     let primary_hdu = Hdu::new(&shape, data);
@@ -94,7 +94,7 @@ fn main() {
     .expect("Failed to create");
 
     println!("creating ctm (phase<->meas)");
-    let mat = CovMat::new(&phase_measurements, &slope_measurements, &cov);
+    let mat = CovMat::new(&phase_measurements, &slope_measurements, &cov, 0.0);
     let shape = [mat.ncols(), mat.nrows()];
     let data: Vec<f64> = mat.flattened_array();
     let primary_hdu = Hdu::new(&shape, data);

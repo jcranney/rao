@@ -105,7 +105,7 @@ fn imat_and_cov() {
     Fits::create("/tmp/toy_imat.fits", primary_hdu).expect("Failed to create");
     println!("{:10.2e} sec for saving fits", 1e-6*(now.elapsed().as_micros() as f64));
     
-    let covmat = CovMat::new(&measurements, &measurements, &cov_model);
+    let covmat = CovMat::new(&measurements, &measurements, &cov_model, 0.0);
     println!("\nBuilding covariance matrix");
     
     let now = time::Instant::now();

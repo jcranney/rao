@@ -590,7 +590,7 @@ mod tests {
                 line: Line::new_on_axis(x, 0.0)
             }
         ).collect();
-        let covmat = CovMat::new(&measurements,&measurements,&vk);
+        let covmat = CovMat::new(&measurements, &measurements, &vk, 1e-3);
         println!("{covmat}");
     }
     
@@ -620,7 +620,7 @@ mod tests {
                 altitude: f64::INFINITY,
             },
         ];
-        let covmat = CovMat::new(&measurements, &measurements, &vk);
+        let covmat = CovMat::new(&measurements, &measurements, &vk, 1e-3);
         println!("{covmat}");
     }
 

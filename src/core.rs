@@ -324,7 +324,12 @@ impl<T: Sampler, U: Sampleable> fmt::Display for IMat<'_, T, U> {
 ///     rao::Vec2D{x: 10.0, y: 0.0}, // speed of layer (metres per second)
 /// );
 ///
-/// let covmat = rao::CovMat::new(&measurements, &measurements, &vk_layer);
+/// let covmat = rao::CovMat::new(
+///     &measurements,  // wfs slopes
+///     &measurements,  // wfs slopes
+///     &vk_layer,  // turbulence model
+///     0.0,  // time between samples (zero, since auto-covariance)
+/// );
 /// println!("{}", covmat);
 /// ```
 /// which will print something similar to:
@@ -359,6 +364,8 @@ pub struct CovMat<'a, T: CoSampleable, L: Sampler, R: Sampler>
     ///
     /// Must implement the [`CoSampleable`] trait.
     pub cov_model: &'a T,
+    /// time difference between L and R
+    pub dt: f64,
 }
 
 impl<'a, T: CoSampleable, L: Sampler, R: Sampler> CovMat<'a, T, L, R> {
@@ -370,12 +377,14 @@ impl<'a, T: CoSampleable, L: Sampler, R: Sampler> CovMat<'a, T, L, R> {
     pub fn new(
         samplers_left: &'a [L],
         samplers_right: &'a [R],
-        cov_model: &'a T
+        cov_model: &'a T,
+        dt: f64,
     ) -> CovMat<'a, T, L, R> {
         CovMat {
             samplers_left,
             samplers_right,
             cov_model,
+            dt,
         }
     }
 }
@@ -390,7 +399,7 @@ impl<T: CoSampleable, L: Sampler, R: Sampler> Matrix for CovMat<'_, T, L, R> {
     fn eval(&self, row_index: usize, col_index: usize) -> f64 {
         let sampler_left: &L = &self.samplers_left[row_index];
         let sampler_right: &R = &self.samplers_right[col_index];
-        sampler_left.cosample(sampler_right, self.cov_model, 1.0)
+        sampler_left.cosample(sampler_right, self.cov_model, self.dt)
     }
 }
 
