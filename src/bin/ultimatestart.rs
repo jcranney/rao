@@ -67,7 +67,7 @@ fn main() {
         idx += NSUBX*NSUBX;
     }
 
-    let cov = VonKarmanLayer::new(0.1, 25.0, 0.0);
+    let cov = VonKarmanLayer::new(0.1, 25.0, 0.0, Vec2D { x: 10.0, y: 0.0 });
 
     println!("creating imat (DM to slopes)");
     let mat = IMat::new(&slope_measurements, &actuators);

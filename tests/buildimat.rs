@@ -84,6 +84,7 @@ fn imat_and_cov() {
         0.1, // r0
         25.0, // L0
         0.0, // altitude
+        Vec2D { x: 10.0, y: 0.0 }
     );
     
     // Build the imat:

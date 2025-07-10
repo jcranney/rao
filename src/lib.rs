@@ -283,14 +283,15 @@ pub struct VonKarmanLayer {
     pub r0: f64,
     pub l0: f64,
     pub alt: f64,
+    pub v: Vec2D,
 }
 
 impl VonKarmanLayer {
     /// Construct a new von Karman turbulence layer from its parameters
     #[must_use]
-    pub fn new(r0: f64, l0: f64, alt: f64) -> VonKarmanLayer {
+    pub fn new(r0: f64, l0: f64, alt: f64, v: Vec2D) -> VonKarmanLayer {
         VonKarmanLayer {
-            r0, l0, alt
+            r0, l0, alt, v,
         }
     }
 }
@@ -301,9 +302,9 @@ impl VonKarmanLayer {
 /// von Karman turbulence statistical model, returning the covariance between
 /// two [`Line`]s intercepting that layer.
 impl CoSampleable for VonKarmanLayer {
-    fn cosample(&self, line_a: &Line, line_b:&Line) -> f64 {
+    fn cosample(&self, line_a: &Line, line_b:&Line, dt: f64) -> f64 {
         let p1 = line_a.position_at_altitude(self.alt);
-        let p2 = line_b.position_at_altitude(self.alt);
+        let p2 = line_b.position_at_altitude(self.alt) - dt * self.v.clone();
         utils::vk_cov((p1-p2).norm(), self.r0, self.l0)
     }
 }
@@ -359,7 +360,7 @@ mod tests {
     use std::f64;
 
     use super::*;
-    use approx::assert_abs_diff_eq;
+    use approx::{assert_abs_diff_eq, assert_abs_diff_ne};
     
     #[test]
     fn gaussian_on_axis_phase() {
@@ -564,11 +565,14 @@ mod tests {
             r0: 0.1,
             l0: 25.0,
             alt: 1000.0,
+            v: Vec2D { x: 10.0, y: 0.0 }
         };
         let line = Line::new_on_axis(0.0,0.0);
-        let a = vk.cosample(&line, &line);
+        let a = vk.cosample(&line, &line, 0.0);
         assert_abs_diff_eq!(a,utils::vk_cov(0.0, vk.r0, vk.l0));
         assert_abs_diff_eq!(a,856.346_613_137_351_7,epsilon=1e-3);
+        let a = vk.cosample(&line, &line, 1.0);
+        assert_abs_diff_ne!(a,856.346_613_137_351_7,epsilon=1e-3);
     }
 
     #[test]
@@ -577,6 +581,7 @@ mod tests {
             r0: 0.1,
             l0: 25.0,
             alt: 1000.0,
+            v: Vec2D { x: 10.0, y: 0.0 }
         };
         let measurements: Vec<Measurement> = (0..10)
         .map(|i| f64::from(i) * 0.8)
@@ -595,6 +600,7 @@ mod tests {
             r0: 0.1,
             l0: 25.0,
             alt: 1000.0,
+            v: Vec2D{ x: 10.0, y: 0.0 }
         };
         let line = Line::new_on_axis(0.0, 0.0);
         let measurements = [

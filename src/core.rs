@@ -72,16 +72,16 @@ pub trait Sampler {
     ///     y += cosampleable(line_a, line_b) * coeff_a * coeff_b
     /// return y
     /// ```
-    fn cosample(&self, other: &dyn Sampler, object: &dyn CoSampleable) -> f64 {
+    fn cosample(&self, other: &dyn Sampler, object: &dyn CoSampleable, dt: f64) -> f64 {
         let bundle_left = self.get_bundle();
         let bundle_right = other.get_bundle();
         bundle_left
         .iter()
-        .map(|(line_left,coeff_left)| {
+        .map(|(line_left, coeff_left)| {
             bundle_right
             .iter()
             .map(|(line_right,coeff_right)| {
-                object.cosample(line_left,line_right)*coeff_left*coeff_right
+                object.cosample(line_left, line_right, dt) * coeff_left * coeff_right
             })
             .sum::<f64>()
         }).sum()
@@ -103,7 +103,7 @@ pub trait Sampleable {
 /// [`CoSampleable::cosample`] method.
 pub trait CoSampleable {
     /// takes the object itself and two [`crate::Line`]s, and returns a scalar float.
-    fn cosample(&self, p: &Line, q: &Line) -> f64;
+    fn cosample(&self, p: &Line, q: &Line, dt: f64) -> f64;
 }
 
 /// Generalised interaction matrix between [Sampler] and [Sampleable].
@@ -321,6 +321,7 @@ impl<T: Sampler, U: Sampleable> fmt::Display for IMat<'_, T, U> {
 ///     0.1,  // r0 (Fried parameter), metres
 ///     25.0, // L0 (outer scale), metres
 ///     0.0, // altitude of layer, metres
+///     rao::Vec2D{x: 10.0, y: 0.0}, // speed of layer (metres per second)
 /// );
 ///
 /// let covmat = rao::CovMat::new(&measurements, &measurements, &vk_layer);
@@ -389,7 +390,7 @@ impl<T: CoSampleable, L: Sampler, R: Sampler> Matrix for CovMat<'_, T, L, R> {
     fn eval(&self, row_index: usize, col_index: usize) -> f64 {
         let sampler_left: &L = &self.samplers_left[row_index];
         let sampler_right: &R = &self.samplers_right[col_index];
-        sampler_left.cosample(sampler_right, self.cov_model)
+        sampler_left.cosample(sampler_right, self.cov_model, 1.0)
     }
 }
 
