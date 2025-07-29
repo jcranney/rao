@@ -18,6 +18,13 @@ These two matrices are typically the largest computational burden in the
 configuration of real-time control (RTC) for AO, and also the most
 performance-sensitive parts of the RTC.
 
+## pyrao
+There is a Python-wrapper for this package. This is less customisable, but allows for quick construction of interaction matrices and covariance matrices directly from Python. Check it out here: [github.com/jcranney/pyrao](https://github.com/jcranney/pyrao), or install it with pip:
+```bash
+pip install rao
+```
+
+
 ## Examples
 For the latest and most up-to-date examples, see [docs.rs/rao](https://docs.rs/rao/latest/rao/).
 
