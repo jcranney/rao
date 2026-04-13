@@ -65,6 +65,8 @@
 //!                 sigma: rao::coupling_to_sigma(COUPLING, PITCH),
 //!                 // position of actuator in 3D (z=altitude)
 //!                 position: rao::Vec3D::new(x, y, 0.0),
+//!                 // microns per volt of actuator
+//!                 microns_per_volt: 1.0,
 //!             }
 //!         );
 //!     }
@@ -96,6 +98,7 @@ pub use crate::core::{
     IMat,
     CovMat,
 };
+use serde::{Serialize,Deserialize};
 
 
 /// Common [Sampler]s in Adaptive Optics
@@ -103,7 +106,7 @@ pub use crate::core::{
 /// A [Measurement] provides a scalar-valued sample of an AO system. A single
 /// measurement device (e.g., a Shack Hartmann WFS) is typically comprised of 
 /// many [Measurement]s, e.g., `&[Measurement; N]`.
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
 pub enum Measurement{
     /// The null measurement, always returning 0.0 regardless of the measured object.
     Zero,
@@ -239,7 +242,7 @@ impl Sampler for Measurement {
 /// An [Actuator]'s state is defined by a scalar value, so a device with `N`
 /// actuatable degrees of freedom is considered as `N` different [Actuator]s,
 /// e.g., `&[Actuator; N]`.
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
 pub enum Actuator{
     /// A null actuator, making zero impact on any `Measurement`
     Zero,
@@ -250,6 +253,8 @@ pub enum Actuator{
         sigma: f64,
         /// position of actuator in 3d space, z=altitude.
         position: Vec3D,
+        /// microns of displacement per volt
+        microns_per_volt: f64,
     },
     TipTilt {
         /// position along slope of TT actuator surface where the amplitude
@@ -266,9 +271,9 @@ impl Sampleable for Actuator {
     fn sample(&self, line: &Line) -> f64 {
         match self {
             Self::Zero => 0.0,
-            Self::Gaussian{sigma, position} => {
+            Self::Gaussian{sigma, position, microns_per_volt } => {
                 let distance = position.distance_at_altitude(line);
-                utils::gaussian(distance / sigma)
+                utils::gaussian(distance / sigma) * microns_per_volt
             },
             Self::TipTilt{unit_response} => {
                 line.position_at_altitude(0.0).dot(unit_response)
@@ -278,7 +283,7 @@ impl Sampleable for Actuator {
 }
 
 /// Simple covariance model, this might be refactored into an enum of models.
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
 pub struct VonKarmanLayer {
     pub r0: f64,
     pub l0: f64,
@@ -310,7 +315,7 @@ impl CoSampleable for VonKarmanLayer {
 }
 
 
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
 pub struct Pupil {
     pub rad_outer: f64,
     pub rad_inner: f64,
@@ -368,6 +373,7 @@ mod tests {
             Actuator::Gaussian{
                 sigma: coupling_to_sigma(0.5,1.0),
                 position: Vec3D::new(0.0, 0.0, 0.0),
+                microns_per_volt: 1.0,
             }
         ];
         let measurements = [
@@ -385,6 +391,7 @@ mod tests {
             Actuator::Gaussian{
                 sigma: coupling_to_sigma(0.5,1.0),
                 position: Vec3D::new(0.0, 0.0, 1000.0),
+                microns_per_volt: 1.0,
             }
         ];
         let measurements = [
@@ -402,6 +409,7 @@ mod tests {
             Actuator::Gaussian{
                 sigma: coupling_to_sigma(0.5,1.0),
                 position: Vec3D::new(0.0, 0.0, 1000.0),
+                microns_per_volt: 1.0,
             }
         ];
         let measurements = [
@@ -422,10 +430,12 @@ mod tests {
             Actuator::Gaussian{
                 sigma: coupling_to_sigma(0.5,1.0),
                 position: Vec3D::new(0.0, 0.0, 1000.0),
+                microns_per_volt: 1.0,
             },
             Actuator::Gaussian{
                 sigma: coupling_to_sigma(0.5,1.0),
                 position: Vec3D::new(1.0, 0.0, 1000.0),
+                microns_per_volt: 1.0,
             },
         ];
         let measurements = [
@@ -448,6 +458,7 @@ mod tests {
             Actuator::Gaussian{
                 sigma: coupling_to_sigma(0.5,1.0),
                 position: Vec3D::origin(),
+                microns_per_volt: 1.0,
             }
         ];
         let line = Line::new(1.0, 0.0, 0.0, 0.0);
@@ -483,6 +494,7 @@ mod tests {
             Actuator::Gaussian{
                 sigma: coupling_to_sigma(0.5,1.0),
                 position: Vec3D::origin(),
+                microns_per_volt: 1.0,
             }
         ];
 

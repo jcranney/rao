@@ -20,7 +20,8 @@ fn main() {
                     // standard deviation defined by coupling and pitch
                     sigma: coupling_to_sigma(COUPLING, PITCH),
                     // position of actuator in 3D
-                    position: Vec3D::new(x, y, 0.0),  // z-dimension is altitude
+                    position: Vec3D::new(x, y, 0.0),
+                    microns_per_volt: 1.0,  // z-dimension is altitude
                 }
             );
         }

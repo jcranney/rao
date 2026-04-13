@@ -12,6 +12,7 @@ fn phase_gaussian() {
         Actuator::Gaussian{
             sigma: coupling_to_sigma(0.5,1.0),
             position: Vec3D::new(posx, 0.0, 0.0),
+            microns_per_volt: 1.0,
         }
     ).collect();
     
@@ -38,6 +39,7 @@ fn edgeslope_gaussian() {
         Actuator::Gaussian{
             sigma: coupling_to_sigma(0.5,1.0),
             position: Vec3D::new(posx, 0.0, 0.0),
+            microns_per_volt: 1.0,
         }
     ).collect();
     
@@ -70,6 +72,7 @@ fn imat_and_cov() {
     .map(|x| Actuator::Gaussian {
         sigma: coupling_to_sigma(0.5, 0.2),
         position: Vec3D::new(f64::from(x) * 0.2 + 0.1, 0.0, 0.0),
+        microns_per_volt: 1.0,
     }).collect();
     
     let measurements: Vec<Measurement> = 

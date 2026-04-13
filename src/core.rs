@@ -149,6 +149,7 @@ pub trait CoSampleable {
 ///     rao::Actuator::Gaussian {
 ///         sigma: sigma,
 ///         position: rao::Vec3D::new(x, y, ALTITUDE),
+///         microns_per_volt: 1.0
 ///     }
 /// );
 /// let measurements = MEAS_POS.map(|[x,y]|

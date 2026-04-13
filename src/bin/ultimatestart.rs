@@ -24,6 +24,7 @@ fn main() {
                 Actuator::Gaussian{
                     sigma: coupling_to_sigma(COUPLING, DMPITCH),
                     position: Vec3D::new(x, y, 0.0),
+                    microns_per_volt: 1.0,
                 }
             );
             phase_measurements.push(

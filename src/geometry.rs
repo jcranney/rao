@@ -1,5 +1,7 @@
 use std::ops;
 
+use serde::{Deserialize, Serialize};
+
 /// 2D geometric vector, associated with transverse plane of optical
 /// path.
 ///
@@ -18,7 +20,7 @@ use std::ops;
 /// assert_eq!(e_x.dot(&a), 3.0);
 /// assert_eq!((e_x / 2.0).x, 0.5);
 /// ```
-#[derive(Debug,Clone,PartialEq)]
+#[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
 pub struct Vec2D {
     pub x: f64,
     pub y: f64,
@@ -57,7 +59,7 @@ impl Vec2D {
             1 => vec![a.clone()],
             _ => {
                 (0..npoints)
-                .map(|u| (f64::from(u) / (f64::from(npoints)-1.0)))
+                .map(|u| f64::from(u) / (f64::from(npoints)-1.0))
                 .map(|t| (1.0-t)*a + t*b)
                 .collect()
             }
@@ -150,7 +152,7 @@ impl_op_ex_commutative!(+
 ///     5.0
 /// );
 /// ```
-#[derive(Debug,Clone,PartialEq)]
+#[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
 pub struct Vec3D {
     /// Position in x relative to the optical axis
     pub x: f64,
@@ -198,7 +200,7 @@ impl Vec3D {
 /// y = y0 + yz*t
 /// z = t
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Line {
     /// The x-position at z=0.
     pub x0: f64,
