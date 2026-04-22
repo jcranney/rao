@@ -18,15 +18,15 @@ use std::fmt;
 ///  - LGS elongation estimator, sampling the length of the elongated sodium guide
 ///    star along a particular axis, as seen by a partiucular point in the pupil.
 ///    Actually, this functionality comes for free in the [`crate::Measurement`]
-///    variants, but one would need to implement the appropriate [Sampleable] 
+///    variants, but one would need to implement the appropriate [Sampleable]
 ///    trait for a new `struct SodiumProfile` type.
 pub trait Sampler {
     /// A method which takes a principle line and returns a vector of lines
     /// and coefficients, each of which specify the weight that the samples are
-    /// linearly combined with to form a single sample. See, for example, 
+    /// linearly combined with to form a single sample. See, for example,
     /// [`crate::Measurement::get_bundle`].
-    fn get_bundle(&self) -> Vec<(Line,f64)>;
-    
+    fn get_bundle(&self) -> Vec<(Line, f64)>;
+
     /// A method to sample a [Sampleable] object with the bundle of lines returned
     /// by [`Sampler::get_bundle`].
     ///
@@ -42,25 +42,24 @@ pub trait Sampler {
     /// ```
     fn sample(&self, object: &dyn Sampleable) -> f64 {
         self.get_bundle()
-        .into_iter()
-        .map(|(l,a)|
-            object.sample(&l)*a
-        ).sum()
+            .into_iter()
+            .map(|(l, a)| object.sample(&l) * a)
+            .sum()
     }
-    
-    /// Similar to [`Sampler::sample`] but *co-samples* a [`CoSampleable`] function 
+
+    /// Similar to [`Sampler::sample`] but *co-samples* a [`CoSampleable`] function
     /// with a pair of [Sampler]s.
-    /// 
+    ///
     /// Note crucially that the two [Sampler]s do not themselves need to be the
-    /// same type, they only need to both implement the [Sampler] trait. E.g., 
-    /// in building a covariance matrix (a covariance function makes sense as a 
+    /// same type, they only need to both implement the [Sampler] trait. E.g.,
+    /// in building a covariance matrix (a covariance function makes sense as a
     /// a [`CoSampleable`] type), one can meaningfully have cross-terms in the
-    /// covariance matrix which correspond to the covariance between 
+    /// covariance matrix which correspond to the covariance between
     /// slope-measurements and phase measurements.
     ///
-    /// This method does nested iterations of the bundles returned by each 
-    /// [`Sampler::get_bundle`] method, and co-samples a [`CoSampleable`] function 
-    /// with each line-pair. Then, *quadratically* combined according to the 
+    /// This method does nested iterations of the bundles returned by each
+    /// [`Sampler::get_bundle`] method, and co-samples a [`CoSampleable`] function
+    /// with each line-pair. Then, *quadratically* combined according to the
     /// product of the co-sampled function and the two float coefficients.
     ///
     /// Until I figure out math formatting in rust docs, this python pseduo-code
@@ -76,15 +75,16 @@ pub trait Sampler {
         let bundle_left = self.get_bundle();
         let bundle_right = other.get_bundle();
         bundle_left
-        .iter()
-        .map(|(line_left, coeff_left)| {
-            bundle_right
             .iter()
-            .map(|(line_right,coeff_right)| {
-                object.cosample(line_left, line_right, dt) * coeff_left * coeff_right
+            .map(|(line_left, coeff_left)| {
+                bundle_right
+                    .iter()
+                    .map(|(line_right, coeff_right)| {
+                        object.cosample(line_left, line_right, dt) * coeff_left * coeff_right
+                    })
+                    .sum::<f64>()
             })
-            .sum::<f64>()
-        }).sum()
+            .sum()
     }
 }
 
@@ -107,7 +107,7 @@ pub trait CoSampleable {
 }
 
 /// Generalised interaction matrix between [Sampler] and [Sampleable].
-/// 
+///
 /// The interaction matrix ([`IMat`]) is the interface between any object that
 /// implements [Sampler] (e.g., a measurement) and another object that implements
 /// [Sampleable] (e.g., an actuator).
@@ -117,7 +117,7 @@ pub trait CoSampleable {
 /// Let's assume we have:
 ///  - Two [`crate::Actuator`]s, with Gaussian influence functions, located at `(x, y)`:
 ///    - `(+1.0, 0.0)` metres,
-///    - `(-1.0, 0.0)` metres, 
+///    - `(-1.0, 0.0)` metres,
 ///
 ///    on a deformable mirror conjugated to 10 km in altitude, and with a coupling
 ///    of 0.4 at a pitch of 2.0 metres.
@@ -126,9 +126,9 @@ pub trait CoSampleable {
 ///    - `(-1.0, -1.0)`
 ///    - `( 0.0,  0.0)`
 ///    - `(+1.0, +1.0)`
-/// 
+///
 /// We construct those measurements and actuators, then we can build an imat from
-/// them (since [`crate::Measurement`] implements [Sampler] and [`crate::Actuator`] 
+/// them (since [`crate::Measurement`] implements [Sampler] and [`crate::Actuator`]
 /// implements [Sampleable]). Finally, we can print the elements of that imat:
 /// ```
 /// const PITCH: f64 = 2.0;  // metres
@@ -158,7 +158,7 @@ pub trait CoSampleable {
 ///         line_pos: rao::Line::new_on_axis(x+PITCH/2.0, 0.0),
 ///     }
 /// );
-/// 
+///
 /// let imat = rao::IMat::new(&measurements, &actuators);
 /// println!("{}", imat);
 /// ```
@@ -168,8 +168,8 @@ pub trait CoSampleable {
 ///  [ -0.00 -0.00 ]
 ///  [ -0.15 -0.36 ]]
 /// ```
-/// 
-/// These values tell the *slope per actuator* response in units of "influence 
+///
+/// These values tell the *slope per actuator* response in units of "influence
 /// function units per distance units" per "actuation units". Perhaps it is implied
 /// by classical assumptions that the specific units here might be:
 /// *arcseconds per volt*, or something similar, but as explained below, there is
@@ -187,7 +187,7 @@ pub trait CoSampleable {
 // This is a common point of confusion, particularly for AO newcomers. As it happens,
 // if we are operating under the paraxial regime, and we only consider linear interaction
 // functions (i.e., those that are well captured by an *Interaction Matrix*), then
-// we can safely refuse to define any particular units in this library. 
+// we can safely refuse to define any particular units in this library.
 //
 // To demonstrate, consider the above example. The units of the
 // slope measurements are in *influence function units* per *distance units*.
@@ -199,15 +199,15 @@ pub trait CoSampleable {
 // so the assumption is that the command units are such that an input of 1.0 would
 // produce a phase of 1.0 in the desired phase units. Let's assume that the desired
 // phase units are microns, then the commands should be scaled such that a command of
-// 1.0 would produce a surface aberration of the DM equal to 1.0 microns at the 
+// 1.0 would produce a surface aberration of the DM equal to 1.0 microns at the
 // actuator position.
-// Then the output of the interaction matrix (the slopes) would be in units of 
+// Then the output of the interaction matrix (the slopes) would be in units of
 // microns per metres == micro-radians (based on our assumptions here). If one desired "arcseconds"
-// units for slopes, then one can convert (the dimensionless) micro-radians to 
+// units for slopes, then one can convert (the dimensionless) micro-radians to
 // arcseconds by the usual `180/PI*3600/1e6`. Building these assumptions into this
 // library assumes the user's intentions, and leaving them out puts the burden on
 // the user to treat their units with care and precision. I'm still not sure if
-// it's a brave choice or a cowardly one, but we decide to assume the user's 
+// it's a brave choice or a cowardly one, but we decide to assume the user's
 // *attention* rather than their *intention*.
 //
 // In the example above, we denoted the distance units as metres,
@@ -238,12 +238,12 @@ pub trait CoSampleable {
 // ```
 // Note that this is exactly the same interaction matrix as before, but scaled by
 // a factor of 201.1680 (metres per furlong).
-// The way to read this is, for example, the gradient of the first influence 
+// The way to read this is, for example, the gradient of the first influence
 // function when traced along the first measurement axis is 73.31 units per furlong,
 // or indeed, per YOUR_UNITS where you assumed those units in the definition of
-// the system. The point is, if you are consistent with your inputs, then you can 
+// the system. The point is, if you are consistent with your inputs, then you can
 // use any units and the output will comply.
-// 
+//
 // At present, the only influence functions available are the Gaussian one, and
 // "tip-tilt" but this "unit agnosticism" is so attractive that it might as well
 // set the convention for this crate:
@@ -256,7 +256,7 @@ pub struct IMat<'a, T: Sampler, U: Sampleable> {
     pub sampleables: &'a [U],
 }
 
-impl<'a, T: Sampler, U: Sampleable> IMat<'a, T, U>{
+impl<'a, T: Sampler, U: Sampleable> IMat<'a, T, U> {
     /// Define a new [`IMat`] with [Sampler]s and [Sampleable]s. This function
     /// is *lazy*, and the actual computation of the interaction matrix
     /// only happens when the elements of that matrix are requested (and happens
@@ -289,15 +289,14 @@ impl<T: Sampler, U: Sampleable> fmt::Display for IMat<'_, T, U> {
     }
 }
 
-
 /// Generalised covariance matrix between two [Sampler]s.
 ///
 /// Given two slices of [Sampler]s (`samplers_left` and `samplers_right`) and a
-/// [`CoSampleable`] object, the [`CovMat`] is the set of cosamples of that object 
+/// [`CoSampleable`] object, the [`CovMat`] is the set of cosamples of that object
 /// by all pairs of elements between `samplers_left` and `samplers_right`.
 ///
 /// The naming, (*`CovMat`*, *`cov_model`*, etc.) comes from the prototypical
-/// example of this object: the covariance matrix between measurements of an 
+/// example of this object: the covariance matrix between measurements of an
 /// AO system. Taking the example from [`IMat`], we additionally define a covariance
 /// model:
 /// ```
@@ -316,7 +315,7 @@ impl<T: Sampler, U: Sampleable> fmt::Display for IMat<'_, T, U> {
 ///         line_pos: rao::Line::new_on_axis(x+PITCH/2.0, y),
 ///     }
 /// );
-/// 
+///
 /// // Define a von Karman layer of turbulence:
 /// let vk_layer = rao::VonKarmanLayer::new(
 ///     0.1,  // r0 (Fried parameter), metres
@@ -341,16 +340,15 @@ impl<T: Sampler, U: Sampleable> fmt::Display for IMat<'_, T, U> {
 /// ```
 /// which is the covariance matrix between those measurements. The geometry of
 /// the system is reflected in the values of the matrix - the measurements which
-/// are closer together have a higher covariance. 
+/// are closer together have a higher covariance.
 // The units follow the same argument
 // as discussed in the documentation of the [IMat] type, but for this specific
 // example, we can infer from the comments that the elements of the covariance
 // matrix have units of "covariance function units per distance units"^2, and
-// assuming that the user expects the influence function to return units of 
+// assuming that the user expects the influence function to return units of
 // microns, then these elements are in units of microrad^2.
 #[derive(Debug)]
-pub struct CovMat<'a, T: CoSampleable, L: Sampler, R: Sampler>
-{
+pub struct CovMat<'a, T: CoSampleable, L: Sampler, R: Sampler> {
     /// left-hand-side slice of [Sampler]s
     ///
     /// "left" here refers to the interpretation of a matrix which can be

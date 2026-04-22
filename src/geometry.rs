@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 /// assert_eq!(e_x.dot(&a), 3.0);
 /// assert_eq!((e_x / 2.0).x, 0.5);
 /// ```
-#[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Vec2D {
     pub x: f64,
     pub y: f64,
@@ -28,63 +28,68 @@ pub struct Vec2D {
 
 impl Vec2D {
     /// Create a new [`Vec2D`] from the coordinates in the transverse plane.
-    #[must_use] pub fn new(x: f64, y: f64) -> Self {
-        Self {x,y}
+    #[must_use]
+    pub fn new(x: f64, y: f64) -> Self {
+        Self { x, y }
     }
     /// create a unit vector along x-axis.
-    #[must_use] pub fn x_unit() -> Self {
-        Self {x:1.0, y:0.0}
+    #[must_use]
+    pub fn x_unit() -> Self {
+        Self { x: 1.0, y: 0.0 }
     }
     /// create a unit vector along y-axis.
-    #[must_use] pub fn y_unit() -> Self {
-        Self {x:0.0, y:1.0}
+    #[must_use]
+    pub fn y_unit() -> Self {
+        Self { x: 0.0, y: 1.0 }
     }
     /// return the (Euclidean) norm of the [`Vec2D`].
-    #[must_use] pub fn norm(&self) -> f64 {
+    #[must_use]
+    pub fn norm(&self) -> f64 {
         self.norm2().powf(0.5)
     }
     /// return the (Euclidean) squared-norm of the [`Vec2D`].
-    #[must_use] pub fn norm2(&self) -> f64 {
-        self.x.powf(2.0)+self.y.powf(2.0)
+    #[must_use]
+    pub fn norm2(&self) -> f64 {
+        self.x.powf(2.0) + self.y.powf(2.0)
     }
     /// return the dot (inner) product of the [`Vec2D`] with another (borrowed) [`Vec2D`].
-    #[must_use] pub fn dot(&self, other: &Self) -> f64 {
-        self.x*other.x+self.y*other.y
+    #[must_use]
+    pub fn dot(&self, other: &Self) -> f64 {
+        self.x * other.x + self.y * other.y
     }
-    /// Calculate a uniformly spaced set of points between two [`Vec2D`]s, 
+    /// Calculate a uniformly spaced set of points between two [`Vec2D`]s,
     /// including the specified endpoints
-    #[must_use] pub fn linspace(a: &Self, b: &Self, npoints: u32) -> Vec<Self> {
+    #[must_use]
+    pub fn linspace(a: &Self, b: &Self, npoints: u32) -> Vec<Self> {
         match npoints {
             0 => vec![],
             1 => vec![a.clone()],
-            _ => {
-                (0..npoints)
-                .map(|u| f64::from(u) / (f64::from(npoints)-1.0))
-                .map(|t| (1.0-t)*a + t*b)
-                .collect()
-            }
+            _ => (0..npoints)
+                .map(|u| f64::from(u) / (f64::from(npoints) - 1.0))
+                .map(|t| (1.0 - t) * a + t * b)
+                .collect(),
         }
     }
     /// Calculate the centre of equal sized intervals between two [`Vec2D`]s
-    #[must_use] pub fn linspread(a: &Self, b: &Self, npoints: u32) -> Vec<Self> {
+    #[must_use]
+    pub fn linspread(a: &Self, b: &Self, npoints: u32) -> Vec<Self> {
         (0..npoints)
-        .map(|u| (f64::from(u) / f64::from(npoints)) + 1.0/ (2.0 * f64::from(npoints)))
-        .map(|t| (1.0-t)*a + t*b)
-        .collect()
+            .map(|u| (f64::from(u) / f64::from(npoints)) + 1.0 / (2.0 * f64::from(npoints)))
+            .map(|t| (1.0 - t) * a + t * b)
+            .collect()
     }
     /// Calculates a [`Vec2D`] that is rotated by +90 degrees, such that it is
     /// orthogonal to the input [`Vec2D`].
-    #[must_use] pub fn ortho(&self) -> Self {
+    #[must_use]
+    pub fn ortho(&self) -> Self {
         Self {
             x: -self.y,
-            y: self.x
+            y: self.x,
         }
     }
 }
 
-impl_op!(- |a:Vec2D| -> Vec2D { 
-    Vec2D::new(-a.x, -a.y) 
-});
+impl_op!(-|a: Vec2D| -> Vec2D { Vec2D::new(-a.x, -a.y) });
 
 impl_op_ex_commutative!(/ |a:&Vec2D,b:&f64| -> Vec2D {
     Vec2D {
@@ -92,7 +97,7 @@ impl_op_ex_commutative!(/ |a:&Vec2D,b:&f64| -> Vec2D {
         y: a.y / b,
     }
 });
-impl_op_ex_commutative!(* |a:&Vec2D,b:&f64| -> Vec2D {
+impl_op_ex_commutative!(*|a: &Vec2D, b: &f64| -> Vec2D {
     Vec2D {
         x: a.x * b,
         y: a.y * b,
@@ -104,7 +109,7 @@ impl_op_ex!(+ |a:&Vec2D,b:&Vec2D| -> Vec2D {
         y: a.y + b.y,
     }
 });
-impl_op_ex!(- |a:&Vec2D,b:&Vec2D| -> Vec2D {
+impl_op_ex!(-|a: &Vec2D, b: &Vec2D| -> Vec2D {
     Vec2D {
         x: a.x - b.x,
         y: a.y - b.y,
@@ -124,11 +129,10 @@ impl_op_ex_commutative!(+
     }
 );
 
-
 /// 3D geometric vector, associated with both transverse (x,y) and
 /// propagation (z) dimensions.
 ///
-/// This struct is used for defining coordinates of optical components that 
+/// This struct is used for defining coordinates of optical components that
 /// have a meaninful position along the optical propagation axis (e.g., an actuator
 /// of a deformable mirror conjugated to some altitude). In particular this
 /// struct is useful for finding the intersection of an optical ray (see [Line])
@@ -152,7 +156,7 @@ impl_op_ex_commutative!(+
 ///     5.0
 /// );
 /// ```
-#[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Vec3D {
     /// Position in x relative to the optical axis
     pub x: f64,
@@ -160,28 +164,36 @@ pub struct Vec3D {
     pub y: f64,
     /// Position in z relative to the optical axis
     /// e.g., 0km => pupil-plane, +infinity => object-plane
-    pub z: f64, 
+    pub z: f64,
 }
 
 impl Vec3D {
     /// Create a new [`Vec3D`] from a 3D coordinate.
-    #[must_use] pub fn new(x: f64, y: f64, z: f64) -> Self {
-        Self {x,y,z}
+    #[must_use]
+    pub fn new(x: f64, y: f64, z: f64) -> Self {
+        Self { x, y, z }
     }
     /// Convenience function for creating a [`Vec3D`] at the origin.
-    #[must_use] pub fn origin() -> Self {
-        Self {x:0.0, y:0.0, z: 0.0}
+    #[must_use]
+    pub fn origin() -> Self {
+        Self {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        }
     }
     /// Return the Euclidean norm of the displacement vector between self
     /// and the intersection of a [Line] at the altitude of self.
-    #[must_use] pub fn distance_at_altitude(&self, line: &Line) -> f64 {
+    #[must_use]
+    pub fn distance_at_altitude(&self, line: &Line) -> f64 {
         self.displacement_at_altitude(line).norm()
     }
     /// Return the displacement vector between self
     /// and the intersection of a [Line] at the altitude of self.
-    #[must_use] pub fn displacement_at_altitude(&self, line: &Line) -> Vec2D {
+    #[must_use]
+    pub fn displacement_at_altitude(&self, line: &Line) -> Vec2D {
         let line_intersection = line.position_at_altitude(self.z);
-        Vec2D{
+        Vec2D {
             x: (line_intersection.x - self.x),
             y: (line_intersection.y - self.y),
         }
@@ -214,34 +226,38 @@ pub struct Line {
 
 impl Line {
     /// Constructor for a new [Line].
-    #[must_use] pub fn new(x0: f64, xz: f64, y0: f64, yz: f64) -> Line {
-        Line {x0,xz,y0,yz}
+    #[must_use]
+    pub fn new(x0: f64, xz: f64, y0: f64, yz: f64) -> Line {
+        Line { x0, xz, y0, yz }
     }
     /// Convenience function for [Line]s that do not depend on z
-    #[must_use] pub fn new_on_axis(x0: f64, y0: f64) -> Line {
+    #[must_use]
+    pub fn new_on_axis(x0: f64, y0: f64) -> Line {
         Line::new(x0, 0.0, y0, 0.0)
     }
     /// Convenience function for defining a [Line] given two points
-    /// in 3D. Results in singularities if a.z == b.z, otherwise is 
+    /// in 3D. Results in singularities if a.z == b.z, otherwise is
     /// gauaranteed to be stable.
-    #[must_use] pub fn new_from_two_points(a: &Vec3D, b: &Vec3D) -> Line {
-        let xz = (b.x - a.x)/(b.z - a.z);
-        let yz = (b.y - a.y)/(b.z - a.z);
-        let x0 = a.x - (a.z)/(b.z-a.z)*(b.x-a.x);
-        let y0 = a.y - (a.z)/(b.z-a.z)*(b.y-a.y);
-        Line::new(x0,xz,y0,yz)
+    #[must_use]
+    pub fn new_from_two_points(a: &Vec3D, b: &Vec3D) -> Line {
+        let xz = (b.x - a.x) / (b.z - a.z);
+        let yz = (b.y - a.y) / (b.z - a.z);
+        let x0 = a.x - (a.z) / (b.z - a.z) * (b.x - a.x);
+        let y0 = a.y - (a.z) / (b.z - a.z) * (b.y - a.y);
+        Line::new(x0, xz, y0, yz)
     }
     /// Calculate the [`Vec2D`] coordinates in the transverse plane at
     /// a specified altitude.
-    #[must_use] pub fn position_at_altitude(&self, alt: f64) -> Vec2D {
-        Vec2D::new(alt*self.xz + self.x0, alt*self.yz + self.y0)
+    #[must_use]
+    pub fn position_at_altitude(&self, alt: f64) -> Vec2D {
+        Vec2D::new(alt * self.xz + self.x0, alt * self.yz + self.y0)
     }
-    
-    #[must_use] pub fn distance_at_ground(&self, other: &Line) -> f64 {
+
+    #[must_use]
+    pub fn distance_at_ground(&self, other: &Line) -> f64 {
         Vec2D::new(self.x0 - other.x0, self.y0 - other.y0).norm()
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -250,9 +266,9 @@ mod tests {
 
     #[test]
     fn linspread() {
-        let a = Vec2D::new(0.0,3.0);
-        let b = Vec2D::new(3.0,0.0);
-        let ls = Vec2D::linspread(&a,&b,3);
+        let a = Vec2D::new(0.0, 3.0);
+        let b = Vec2D::new(3.0, 0.0);
+        let ls = Vec2D::linspread(&a, &b, 3);
         assert_abs_diff_eq!(ls[0].x, 0.5);
         assert_abs_diff_eq!(ls[0].y, 2.5);
         assert_abs_diff_eq!(ls[1].x, 1.5);
@@ -263,9 +279,9 @@ mod tests {
 
     #[test]
     fn linspace() {
-        let a = Vec2D::new(1.0,2.0);
-        let b = Vec2D::new(4.0,0.0);
-        let ls = Vec2D::linspace(&a,&b,3);
+        let a = Vec2D::new(1.0, 2.0);
+        let b = Vec2D::new(4.0, 0.0);
+        let ls = Vec2D::linspace(&a, &b, 3);
         assert_abs_diff_eq!(ls[1].x, 2.5);
         assert_abs_diff_eq!(ls[1].y, 1.0);
         assert_eq!(ls[0], a);
@@ -274,8 +290,8 @@ mod tests {
 
     #[test]
     fn adding() {
-        let a = Vec2D::new(1.0,2.0);
-        let b = Vec3D::new(10.0,20.0,30.0);
+        let a = Vec2D::new(1.0, 2.0);
+        let b = Vec3D::new(10.0, 20.0, 30.0);
         let c = a + b;
         assert_abs_diff_eq!(c.x, 11.0);
         assert_abs_diff_eq!(c.y, 22.0);

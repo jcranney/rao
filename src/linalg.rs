@@ -4,39 +4,44 @@ use std::fmt;
 /// Convenience trait to standardise interactions with "matrix-like" objects.
 pub trait Matrix {
     /// number of rows in the matrix
-    fn nrows(&self)->usize;
+    fn nrows(&self) -> usize;
     /// number of columns in the matrix
-    fn ncols(&self)->usize;
+    fn ncols(&self) -> usize;
     /// evaluated value of the matrix at a specified element.
-    fn eval(&self, row_index: usize, col_index: usize)->f64;
-    
+    fn eval(&self, row_index: usize, col_index: usize) -> f64;
+
     /// Return the (C-format / row-major) flattened matrix, e.g., to
     /// be saved to disk.
-    fn flattened_array(&self) -> Vec<f64> where Self:Sync {
+    fn flattened_array(&self) -> Vec<f64>
+    where
+        Self: Sync,
+    {
         (0..self.nrows())
-        .into_par_iter()
-        .map(move |row_index|
-            (0..self.ncols())
             .into_par_iter()
-            .map(move |col_index| 
-                self.eval(row_index, col_index)
-            ).collect::<Vec<f64>>()
-        )
-        .flatten()
-        .collect()
+            .map(move |row_index| {
+                (0..self.ncols())
+                    .into_par_iter()
+                    .map(move |col_index| self.eval(row_index, col_index))
+                    .collect::<Vec<f64>>()
+            })
+            .flatten()
+            .collect()
     }
-    
+
     /// Return the (C-format / row-major) interaction matrix as a [Vec<Vec<64>>]
-    fn matrix(&self) -> Vec<Vec<f64>> where Self:Sync {
+    fn matrix(&self) -> Vec<Vec<f64>>
+    where
+        Self: Sync,
+    {
         (0..self.nrows())
-        .into_par_iter()
-        .map(|row_index|
-            (0..self.ncols())
             .into_par_iter()
-            .map(|col_index| 
-                self.eval(row_index, col_index)
-            ).collect::<Vec<f64>>()
-        ).collect()
+            .map(|row_index| {
+                (0..self.ncols())
+                    .into_par_iter()
+                    .map(|col_index| self.eval(row_index, col_index))
+                    .collect::<Vec<f64>>()
+            })
+            .collect()
     }
 
     /// format function, which can be used when implementing Display
@@ -45,7 +50,7 @@ pub trait Matrix {
             match row_index {
                 0 => write!(f, "[[")?,
                 _ => write!(f, "\n [")?,
-            }    
+            }
             for col_index in 0..self.ncols() {
                 write!(f, " {:5.2}", self.eval(row_index, col_index))?;
             }
@@ -56,12 +61,15 @@ pub trait Matrix {
     }
 
     /// sample the matrix at specified entries (e.g., for efficient sparse
-    /// operations). Note that the matrix elements are only evaluated where 
+    /// operations). Note that the matrix elements are only evaluated where
     /// the matrix is sampled.
-    fn samples(&self, indices: Vec<(usize, usize)>) -> Vec<f64>  where Self:Sync {
-        indices.into_par_iter()
-        .map(|(row_index, col_index)|
-            self.eval(row_index, col_index)
-        ).collect()
+    fn samples(&self, indices: Vec<(usize, usize)>) -> Vec<f64>
+    where
+        Self: Sync,
+    {
+        indices
+            .into_par_iter()
+            .map(|(row_index, col_index)| self.eval(row_index, col_index))
+            .collect()
     }
 }

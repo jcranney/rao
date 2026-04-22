@@ -1,5 +1,5 @@
 //! # rao
-//! 
+//!
 //! `rao` - Adaptive Optics tools in Rust - is a set of fast and robust adaptive
 //! optics utilities. The current scope of `rao` is for the calculation of
 //! large matrices in AO, used in the configuration of real-time adaptive optics,
@@ -9,7 +9,7 @@
 //!  - `rao::CovMat` - the covariance matrix between measurements.
 //!
 //! These two matrices are typically the largest computational burden in the
-//! configuration of real-time control (RTC) for AO, and also the most 
+//! configuration of real-time control (RTC) for AO, and also the most
 //! performance-sensitive parts of the RTC.
 //!
 //! # Examples
@@ -19,7 +19,7 @@
 //! const N_SUBX: i32 = 8;  // 8 x 8 subapertures
 //! const PITCH: f64 = 0.2;  // 0.2 metres gap between actuators
 //! const COUPLING: f64 = 0.5;  // actuator cross-coupling
-//! 
+//!
 //! // build list of measurements
 //! let mut measurements = vec![];
 //! for i in 0..N_SUBX {
@@ -51,7 +51,7 @@
 //!         });
 //!     }
 //! }
-//! 
+//!
 //! // build list of actuators
 //! let mut actuators = vec![];
 //! for i in 0..(N_SUBX+1) {
@@ -71,43 +71,33 @@
 //!         );
 //!     }
 //! }
-//! 
+//!
 //! // instanciate imat from (actu,meas)
 //! let imat = rao::IMat::new(&measurements, &actuators);
 //! // serialise imat for saving
 //! let data: Vec<f64> = imat.flattened_array();
 //! ```
 
-#[macro_use] extern crate impl_ops;
+#[macro_use]
+extern crate impl_ops;
 
 pub mod utils;
 pub use utils::coupling_to_sigma;
 mod geometry;
-pub use crate::geometry::{
-    Vec2D,
-    Vec3D,
-    Line,
-};
+pub use crate::geometry::{Line, Vec2D, Vec3D};
 mod linalg;
 pub use crate::linalg::Matrix;
 mod core;
-pub use crate::core::{
-    Sampler,
-    Sampleable,
-    CoSampleable,
-    IMat,
-    CovMat,
-};
-use serde::{Serialize,Deserialize};
-
+pub use crate::core::{CoSampleable, CovMat, IMat, Sampleable, Sampler};
+use serde::{Deserialize, Serialize};
 
 /// Common [Sampler]s in Adaptive Optics
-/// 
+///
 /// A [Measurement] provides a scalar-valued sample of an AO system. A single
-/// measurement device (e.g., a Shack Hartmann WFS) is typically comprised of 
+/// measurement device (e.g., a Shack Hartmann WFS) is typically comprised of
 /// many [Measurement]s, e.g., `&[Measurement; N]`.
-#[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
-pub enum Measurement{
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum Measurement {
     /// The null measurement, always returning 0.0 regardless of the measured object.
     Zero,
     /// Phase measurement along a given [Line].
@@ -172,84 +162,86 @@ impl Sampler for Measurement {
     ///  - a [`Measurement::SlopeTwoEdge`] variant returns `2 * npoints` lines, consisting of
     ///    `npoints` positive coefficients, and `npoints` negative coefficients, each scaled
     ///    by the inverse of the ground-layer separation and a factor of `1.0 / npoints as f64`,
-    ///    in order to get a result which is in units of *sampled function units per distance unit*. 
-    fn get_bundle(&self) -> Vec<(Line,f64)> {
+    ///    in order to get a result which is in units of *sampled function units per distance unit*.
+    fn get_bundle(&self) -> Vec<(Line, f64)> {
         match self {
             Measurement::Zero => vec![],
-            Measurement::Phase{line} => vec![(line.clone(),1.0)],
-            Measurement::SlopeTwoLine{line_pos, line_neg} => {
-                let coeff = 1.0/line_pos.distance_at_ground(line_neg);
-                vec![
-                    (line_pos.clone(),  coeff),
-                    (line_neg.clone(), -coeff),
-                ]
-            },
-            Measurement::SlopeTwoEdge{central_line, edge_length, edge_separation, gradient_axis, npoints, altitude} => {
+            Measurement::Phase { line } => vec![(line.clone(), 1.0)],
+            Measurement::SlopeTwoLine { line_pos, line_neg } => {
+                let coeff = 1.0 / line_pos.distance_at_ground(line_neg);
+                vec![(line_pos.clone(), coeff), (line_neg.clone(), -coeff)]
+            }
+            Measurement::SlopeTwoEdge {
+                central_line,
+                edge_length,
+                edge_separation,
+                gradient_axis,
+                npoints,
+                altitude,
+            } => {
                 let coeff = (1.0 / f64::from(*npoints)) / edge_separation;
                 let offset_vec = gradient_axis * edge_separation * 0.5;
-                let point_a =  edge_length * 0.5 * gradient_axis.ortho();
+                let point_a = edge_length * 0.5 * gradient_axis.ortho();
                 let point_b = -point_a.clone();
                 match *altitude {
-                    f64::INFINITY => {
-                        Vec2D::linspread(&point_a, &point_b, *npoints)
-                        .iter()
-                        .flat_map(|p|
-                            vec![
-                                (
-                                    central_line + (p + &offset_vec),
-                                    coeff
-                                ),
-                                (
-                                    central_line + (p - &offset_vec),
-                                    -coeff
-                                ),
-                            ])
-                        .collect()
-                    },
-                    altitude => {
-                        Vec2D::linspread(&point_a, &point_b, *npoints)
+                    f64::INFINITY => Vec2D::linspread(&point_a, &point_b, *npoints)
                         .iter()
                         .flat_map(|p| {
-                            let p_alt = Vec3D::new(central_line.xz*altitude, central_line.yz*altitude, altitude);
+                            vec![
+                                (central_line + (p + &offset_vec), coeff),
+                                (central_line + (p - &offset_vec), -coeff),
+                            ]
+                        })
+                        .collect(),
+                    altitude => Vec2D::linspread(&point_a, &point_b, *npoints)
+                        .iter()
+                        .flat_map(|p| {
+                            let p_alt = Vec3D::new(
+                                central_line.xz * altitude,
+                                central_line.yz * altitude,
+                                altitude,
+                            );
                             vec![
                                 (
                                     Line::new_from_two_points(
-                                        &((central_line + (p + &offset_vec)).position_at_altitude(0.0) + Vec3D::origin()),
+                                        &((central_line + (p + &offset_vec))
+                                            .position_at_altitude(0.0)
+                                            + Vec3D::origin()),
                                         &p_alt,
                                     ),
-                                    coeff
+                                    coeff,
                                 ),
                                 (
                                     Line::new_from_two_points(
-                                        &((central_line + (p - &offset_vec)).position_at_altitude(0.0) + Vec3D::origin()),
+                                        &((central_line + (p - &offset_vec))
+                                            .position_at_altitude(0.0)
+                                            + Vec3D::origin()),
                                         &p_alt,
                                     ),
-                                    -coeff
+                                    -coeff,
                                 ),
-                            ]})
-                        .collect()
-                    }
+                            ]
+                        })
+                        .collect(),
                 }
-            },
+            }
         }
     }
 }
 
-
-
 /// Common [Sampleable]s in Adaptive Optics.
-/// 
+///
 /// An [Actuator]'s state is defined by a scalar value, so a device with `N`
 /// actuatable degrees of freedom is considered as `N` different [Actuator]s,
 /// e.g., `&[Actuator; N]`.
-#[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
-pub enum Actuator{
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum Actuator {
     /// A null actuator, making zero impact on any `Measurement`
     Zero,
     /// A circularly symmetric Gaussian actuator, centred at `position` with
     /// a specified scalar `sigma`. See [`utils::gaussian`] for more info.
     Gaussian {
-        /// sigma of gaussian function in metres. 
+        /// sigma of gaussian function in metres.
         sigma: f64,
         /// position of actuator in 3d space, z=altitude.
         position: Vec3D,
@@ -259,8 +251,8 @@ pub enum Actuator{
     TipTilt {
         /// position along slope of TT actuator surface where the amplitude
         /// of the phase is equal to +1.0 units. This vector is colinear with
-        /// the acuation axis. E.g., if this vector is `(1.0,0.0)`, then the 
-        /// response of the actuator will be a 
+        /// the acuation axis. E.g., if this vector is `(1.0,0.0)`, then the
+        /// response of the actuator will be a
         ///Deliberately not in arcseconds
         /// so that you have to be deliberate and careful about your units.
         unit_response: Vec2D,
@@ -271,19 +263,21 @@ impl Sampleable for Actuator {
     fn sample(&self, line: &Line) -> f64 {
         match self {
             Self::Zero => 0.0,
-            Self::Gaussian{sigma, position, microns_per_volt } => {
+            Self::Gaussian {
+                sigma,
+                position,
+                microns_per_volt,
+            } => {
                 let distance = position.distance_at_altitude(line);
                 utils::gaussian(distance / sigma) * microns_per_volt
-            },
-            Self::TipTilt{unit_response} => {
-                line.position_at_altitude(0.0).dot(unit_response)
             }
+            Self::TipTilt { unit_response } => line.position_at_altitude(0.0).dot(unit_response),
         }
     }
 }
 
 /// Simple covariance model, this might be refactored into an enum of models.
-#[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VonKarmanLayer {
     pub r0: f64,
     pub l0: f64,
@@ -295,9 +289,7 @@ impl VonKarmanLayer {
     /// Construct a new von Karman turbulence layer from its parameters
     #[must_use]
     pub fn new(r0: f64, l0: f64, alt: f64, v: Vec2D) -> VonKarmanLayer {
-        VonKarmanLayer {
-            r0, l0, alt, v,
-        }
+        VonKarmanLayer { r0, l0, alt, v }
     }
 }
 
@@ -307,20 +299,19 @@ impl VonKarmanLayer {
 /// von Karman turbulence statistical model, returning the covariance between
 /// two [`Line`]s intercepting that layer.
 impl CoSampleable for VonKarmanLayer {
-    fn cosample(&self, line_a: &Line, line_b:&Line, dt: f64) -> f64 {
+    fn cosample(&self, line_a: &Line, line_b: &Line, dt: f64) -> f64 {
         let p1 = line_a.position_at_altitude(self.alt);
         let p2 = line_b.position_at_altitude(self.alt) - dt * self.v.clone();
-        utils::vk_cov((p1-p2).norm(), self.r0, self.l0)
+        utils::vk_cov((p1 - p2).norm(), self.r0, self.l0)
     }
 }
 
-
-#[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Pupil {
     pub rad_outer: f64,
     pub rad_inner: f64,
     pub spider_thickness: f64,
-    pub spiders: Vec<(Vec2D,Vec2D)>
+    pub spiders: Vec<(Vec2D, Vec2D)>,
 }
 
 impl Sampleable for Pupil {
@@ -335,9 +326,9 @@ impl Sampleable for Pupil {
             out *= 0.0;
         }
         for spider in &self.spiders {
-            if signed_distance_to_capsule(
-                &p, &spider.0, &spider.1, self.spider_thickness/2.0
-            ) < 0.0 {
+            if signed_distance_to_capsule(&p, &spider.0, &spider.1, self.spider_thickness / 2.0)
+                < 0.0
+            {
                 out *= 0.0;
             }
         }
@@ -349,16 +340,14 @@ fn signed_distance_to_capsule(
     position: &Vec2D,
     capsule_start: &Vec2D,
     capsule_end: &Vec2D,
-    radius: f64
+    radius: f64,
 ) -> f64 {
     let pa: Vec2D = position - capsule_start;
     let ba: Vec2D = capsule_end - capsule_start;
-    let mut h: f64 = pa.dot(&ba)/ba.dot(&ba);
+    let mut h: f64 = pa.dot(&ba) / ba.dot(&ba);
     h = h.clamp(0.0, 1.0);
-    (pa - ba*h).norm() - radius
+    (pa - ba * h).norm() - radius
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -366,209 +355,182 @@ mod tests {
 
     use super::*;
     use approx::{assert_abs_diff_eq, assert_abs_diff_ne};
-    
+
     #[test]
     fn gaussian_on_axis_phase() {
-        let actuators = [
-            Actuator::Gaussian{
-                sigma: coupling_to_sigma(0.5,1.0),
-                position: Vec3D::new(0.0, 0.0, 0.0),
-                microns_per_volt: 1.0,
-            }
-        ];
-        let measurements = [
-            Measurement::Phase{
-                line: Line::new_on_axis(0.0, 0.0)
-            }
-        ];
+        let actuators = [Actuator::Gaussian {
+            sigma: coupling_to_sigma(0.5, 1.0),
+            position: Vec3D::new(0.0, 0.0, 0.0),
+            microns_per_volt: 1.0,
+        }];
+        let measurements = [Measurement::Phase {
+            line: Line::new_on_axis(0.0, 0.0),
+        }];
         let imat = IMat::new(&measurements, &actuators);
-        assert_abs_diff_eq!(imat.eval(0,0), 1.0, epsilon = f64::EPSILON);
+        assert_abs_diff_eq!(imat.eval(0, 0), 1.0, epsilon = f64::EPSILON);
     }
 
     #[test]
     fn gaussian_off_axis_phase() {
-        let actuators = [
-            Actuator::Gaussian{
-                sigma: coupling_to_sigma(0.5,1.0),
-                position: Vec3D::new(0.0, 0.0, 1000.0),
-                microns_per_volt: 1.0,
-            }
-        ];
-        let measurements = [
-            Measurement::Phase{
-                line: Line::new(0.0, 1.0/1000.0, 0.0, 0.0)
-            }
-        ];
+        let actuators = [Actuator::Gaussian {
+            sigma: coupling_to_sigma(0.5, 1.0),
+            position: Vec3D::new(0.0, 0.0, 1000.0),
+            microns_per_volt: 1.0,
+        }];
+        let measurements = [Measurement::Phase {
+            line: Line::new(0.0, 1.0 / 1000.0, 0.0, 0.0),
+        }];
         let imat = IMat::new(&measurements, &actuators);
-        assert_abs_diff_eq!(imat.eval(0,0), 0.5, epsilon = f64::EPSILON);
+        assert_abs_diff_eq!(imat.eval(0, 0), 0.5, epsilon = f64::EPSILON);
     }
 
     #[test]
     fn gaussian_off_axis_phase_twopoint() {
-        let actuators = [
-            Actuator::Gaussian{
-                sigma: coupling_to_sigma(0.5,1.0),
-                position: Vec3D::new(0.0, 0.0, 1000.0),
-                microns_per_volt: 1.0,
-            }
-        ];
-        let measurements = [
-            Measurement::Phase{
-                line: Line::new_from_two_points(
-                    &Vec3D::new(1.0,1.0,0.0),
-                    &Vec3D::new(1.0,-1.0,2000.0),
-                )
-            }
-        ];
+        let actuators = [Actuator::Gaussian {
+            sigma: coupling_to_sigma(0.5, 1.0),
+            position: Vec3D::new(0.0, 0.0, 1000.0),
+            microns_per_volt: 1.0,
+        }];
+        let measurements = [Measurement::Phase {
+            line: Line::new_from_two_points(
+                &Vec3D::new(1.0, 1.0, 0.0),
+                &Vec3D::new(1.0, -1.0, 2000.0),
+            ),
+        }];
         let imat = IMat::new(&measurements, &actuators);
-        assert_abs_diff_eq!(imat.eval(0,0), 0.5);
+        assert_abs_diff_eq!(imat.eval(0, 0), 0.5);
     }
 
     #[test]
     fn simple_symmetric() {
         let actuators = [
-            Actuator::Gaussian{
-                sigma: coupling_to_sigma(0.5,1.0),
+            Actuator::Gaussian {
+                sigma: coupling_to_sigma(0.5, 1.0),
                 position: Vec3D::new(0.0, 0.0, 1000.0),
                 microns_per_volt: 1.0,
             },
-            Actuator::Gaussian{
-                sigma: coupling_to_sigma(0.5,1.0),
+            Actuator::Gaussian {
+                sigma: coupling_to_sigma(0.5, 1.0),
                 position: Vec3D::new(1.0, 0.0, 1000.0),
                 microns_per_volt: 1.0,
             },
         ];
         let measurements = [
-            Measurement::Phase{
+            Measurement::Phase {
                 line: Line::new_on_axis(0.0, 0.0),
             },
-            Measurement::Phase{
+            Measurement::Phase {
                 line: Line::new(1.0, 0.0, 0.0, 0.0),
-            }
+            },
         ];
         let imat = IMat::new(&measurements, &actuators);
-        assert!(imat.eval(0,0)>0.0);
-        assert_abs_diff_eq!(imat.eval(0,0),imat.eval(1,1));
-        assert_abs_diff_eq!(imat.eval(1,0),imat.eval(0,1));
+        assert!(imat.eval(0, 0) > 0.0);
+        assert_abs_diff_eq!(imat.eval(0, 0), imat.eval(1, 1));
+        assert_abs_diff_eq!(imat.eval(1, 0), imat.eval(0, 1));
     }
 
     #[test]
     fn slope_twopoint() {
-        let actuators = [
-            Actuator::Gaussian{
-                sigma: coupling_to_sigma(0.5,1.0),
-                position: Vec3D::origin(),
-                microns_per_volt: 1.0,
-            }
-        ];
+        let actuators = [Actuator::Gaussian {
+            sigma: coupling_to_sigma(0.5, 1.0),
+            position: Vec3D::origin(),
+            microns_per_volt: 1.0,
+        }];
         let line = Line::new(1.0, 0.0, 0.0, 0.0);
         let measurements = [
-            Measurement::SlopeTwoLine{
-                line_neg: &line+Vec2D::new(-1e-5, 0.0),
-                line_pos: &line+Vec2D::new(1e-5, 0.0)
+            Measurement::SlopeTwoLine {
+                line_neg: &line + Vec2D::new(-1e-5, 0.0),
+                line_pos: &line + Vec2D::new(1e-5, 0.0),
             },
-            Measurement::SlopeTwoLine{
-                line_neg: &line+Vec2D::new(-1e-6, 0.0),
-                line_pos: &line+Vec2D::new(1e-6, 0.0)
+            Measurement::SlopeTwoLine {
+                line_neg: &line + Vec2D::new(-1e-6, 0.0),
+                line_pos: &line + Vec2D::new(1e-6, 0.0),
             },
-            Measurement::Phase{
-                line: Line::new(1.0+1e-7, 0.0, 0.0, 0.0),
+            Measurement::Phase {
+                line: Line::new(1.0 + 1e-7, 0.0, 0.0, 0.0),
             },
-            Measurement::Phase{
-                line: Line::new(1.0-1e-7, 0.0, 0.0, 0.0),
+            Measurement::Phase {
+                line: Line::new(1.0 - 1e-7, 0.0, 0.0, 0.0),
             },
         ];
         let imat = IMat::new(&measurements, &actuators);
-        assert_abs_diff_eq!(imat.eval(0,0),imat.eval(1,0),epsilon=1e-8);
+        assert_abs_diff_eq!(imat.eval(0, 0), imat.eval(1, 0), epsilon = 1e-8);
         assert_abs_diff_eq!(
-            (imat.eval(2,0)-imat.eval(3,0))/2e-7,
-            imat.eval(1,0),
-            epsilon=1e-8
+            (imat.eval(2, 0) - imat.eval(3, 0)) / 2e-7,
+            imat.eval(1, 0),
+            epsilon = 1e-8
         );
     }
 
-
     #[test]
     fn slope_twoedge() {
-        let actuators = [
-            Actuator::Gaussian{
-                sigma: coupling_to_sigma(0.5,1.0),
-                position: Vec3D::origin(),
-                microns_per_volt: 1.0,
-            }
-        ];
+        let actuators = [Actuator::Gaussian {
+            sigma: coupling_to_sigma(0.5, 1.0),
+            position: Vec3D::origin(),
+            microns_per_volt: 1.0,
+        }];
 
         let line = Line::new(1.0, 0.0, 0.0, 0.0);
         let measurements = [
-            Measurement::SlopeTwoLine{
-                line_neg: &line+Vec2D::new(-1e-2, 0.0),
-                line_pos: &line+Vec2D::new(1e-2, 0.0),
+            Measurement::SlopeTwoLine {
+                line_neg: &line + Vec2D::new(-1e-2, 0.0),
+                line_pos: &line + Vec2D::new(1e-2, 0.0),
             },
-            Measurement::SlopeTwoEdge{
+            Measurement::SlopeTwoEdge {
                 central_line: line,
                 edge_length: 0.0,
                 edge_separation: 2e-2,
                 gradient_axis: Vec2D::x_unit(),
                 npoints: 100,
                 altitude: f64::INFINITY,
-            }
+            },
         ];
         let imat = IMat::new(&measurements, &actuators);
-        assert_abs_diff_eq!(imat.eval(0,0),imat.eval(1,0),epsilon=1e-10);
+        assert_abs_diff_eq!(imat.eval(0, 0), imat.eval(1, 0), epsilon = 1e-10);
     }
 
     #[test]
     fn slope_tt_twopoint() {
-        let actuators = [
-            Actuator::TipTilt{
-                unit_response: Vec2D::x_unit()
-            }
-        ];
+        let actuators = [Actuator::TipTilt {
+            unit_response: Vec2D::x_unit(),
+        }];
         let line = Line::new(1.0, 0.0, 0.0, 0.0);
         let measurements = [
-            Measurement::SlopeTwoLine{
-                line_neg: &line+Vec2D::new(-1e-6, 0.0),
-                line_pos: &line+Vec2D::new(1e-6, 0.0)
+            Measurement::SlopeTwoLine {
+                line_neg: &line + Vec2D::new(-1e-6, 0.0),
+                line_pos: &line + Vec2D::new(1e-6, 0.0),
             },
-            Measurement::SlopeTwoLine{
-                line_neg: &line+Vec2D::new(-1e-7, 0.0),
-                line_pos: &line+Vec2D::new(1e-7, 0.0)
+            Measurement::SlopeTwoLine {
+                line_neg: &line + Vec2D::new(-1e-7, 0.0),
+                line_pos: &line + Vec2D::new(1e-7, 0.0),
             },
         ];
         let imat = IMat::new(&measurements, &actuators);
-        assert_abs_diff_eq!(imat.eval(0,0),imat.eval(1,0),epsilon=1e-8);
+        assert_abs_diff_eq!(imat.eval(0, 0), imat.eval(1, 0), epsilon = 1e-8);
     }
 
     #[test]
     fn tt_on_axis_phase() {
-        let actuators = [
-            Actuator::TipTilt{
-                unit_response: Vec2D::x_unit()
-            }
-        ];
-        let measurements = [
-            Measurement::Phase {
-                line: Line::new_on_axis(0.0, 0.0)
-            }
-        ];
+        let actuators = [Actuator::TipTilt {
+            unit_response: Vec2D::x_unit(),
+        }];
+        let measurements = [Measurement::Phase {
+            line: Line::new_on_axis(0.0, 0.0),
+        }];
         let imat = IMat::new(&measurements, &actuators);
-        assert_abs_diff_eq!(imat.eval(0,0), 0.0, epsilon = f64::EPSILON);
+        assert_abs_diff_eq!(imat.eval(0, 0), 0.0, epsilon = f64::EPSILON);
     }
 
     #[test]
     fn tt_off_axis_phase() {
-        let actuators = [
-            Actuator::TipTilt{
-                unit_response: Vec2D::x_unit()
-            }
-        ];
-        let measurements = [
-            Measurement::Phase{
-                line: Line::new(2.0, 0.0, 0.0, 0.0)
-            }
-        ];
+        let actuators = [Actuator::TipTilt {
+            unit_response: Vec2D::x_unit(),
+        }];
+        let measurements = [Measurement::Phase {
+            line: Line::new(2.0, 0.0, 0.0, 0.0),
+        }];
         let imat = IMat::new(&measurements, &actuators);
-        assert_abs_diff_eq!(imat.eval(0,0), 2.0, epsilon = f64::EPSILON);
+        assert_abs_diff_eq!(imat.eval(0, 0), 2.0, epsilon = f64::EPSILON);
     }
 
     #[test]
@@ -577,14 +539,14 @@ mod tests {
             r0: 0.1,
             l0: 25.0,
             alt: 1000.0,
-            v: Vec2D { x: 10.0, y: 0.0 }
+            v: Vec2D { x: 10.0, y: 0.0 },
         };
-        let line = Line::new_on_axis(0.0,0.0);
+        let line = Line::new_on_axis(0.0, 0.0);
         let a = vk.cosample(&line, &line, 0.0);
-        assert_abs_diff_eq!(a,utils::vk_cov(0.0, vk.r0, vk.l0));
-        assert_abs_diff_eq!(a,856.346_613_137_351_7,epsilon=1e-3);
+        assert_abs_diff_eq!(a, utils::vk_cov(0.0, vk.r0, vk.l0));
+        assert_abs_diff_eq!(a, 856.346_613_137_351_7, epsilon = 1e-3);
         let a = vk.cosample(&line, &line, 1.0);
-        assert_abs_diff_ne!(a,856.346_613_137_351_7,epsilon=1e-3);
+        assert_abs_diff_ne!(a, 856.346_613_137_351_7, epsilon = 1e-3);
     }
 
     #[test]
@@ -593,35 +555,32 @@ mod tests {
             r0: 0.1,
             l0: 25.0,
             alt: 1000.0,
-            v: Vec2D { x: 10.0, y: 0.0 }
+            v: Vec2D { x: 10.0, y: 0.0 },
         };
         let measurements: Vec<Measurement> = (0..10)
-        .map(|i| f64::from(i) * 0.8)
-        .map(|x|
-            Measurement::Phase{
-                line: Line::new_on_axis(x, 0.0)
-            }
-        ).collect();
+            .map(|i| f64::from(i) * 0.8)
+            .map(|x| Measurement::Phase {
+                line: Line::new_on_axis(x, 0.0),
+            })
+            .collect();
         let covmat = CovMat::new(&measurements, &measurements, &vk, 1e-3);
         println!("{covmat}");
     }
-    
+
     #[test]
     fn test_mixedvkcovmat() {
         let vk = VonKarmanLayer {
             r0: 0.1,
             l0: 25.0,
             alt: 1000.0,
-            v: Vec2D{ x: 10.0, y: 0.0 }
+            v: Vec2D { x: 10.0, y: 0.0 },
         };
         let line = Line::new_on_axis(0.0, 0.0);
         let measurements = [
-            Measurement::Phase {
-                line: line.clone(),
-            },
+            Measurement::Phase { line: line.clone() },
             Measurement::SlopeTwoLine {
-                line_pos: &line+Vec2D::new(0.1,0.0),
-                line_neg: &line+Vec2D::new(-0.1,0.0),
+                line_pos: &line + Vec2D::new(0.1, 0.0),
+                line_neg: &line + Vec2D::new(-0.1, 0.0),
             },
             Measurement::SlopeTwoEdge {
                 central_line: line.clone(),
@@ -638,38 +597,33 @@ mod tests {
 
     #[test]
     fn make_pupil() {
-        let pup = [Pupil{
+        let pup = [Pupil {
             rad_outer: 4.0,
             rad_inner: 0.5,
             spider_thickness: 0.1,
             spiders: vec![
-                (Vec2D::new(-4.0,-4.0),Vec2D::new(3.0,0.0)),
-                (Vec2D::new(-4.0,-4.0),Vec2D::new(3.0,0.0)),
-                (Vec2D::new(-4.0,-4.0),Vec2D::new(3.0,0.0)),
-                (Vec2D::new(-4.0,-4.0),Vec2D::new(3.0,0.0)),
-                ],
+                (Vec2D::new(-4.0, -4.0), Vec2D::new(3.0, 0.0)),
+                (Vec2D::new(-4.0, -4.0), Vec2D::new(3.0, 0.0)),
+                (Vec2D::new(-4.0, -4.0), Vec2D::new(3.0, 0.0)),
+                (Vec2D::new(-4.0, -4.0), Vec2D::new(3.0, 0.0)),
+            ],
         }];
         const NPOINTS: u32 = 1000;
-        let x = Vec2D::linspread(
-            &Vec2D::new(-4.0, 0.0),
-            &Vec2D::new(4.0, 0.0),
-            NPOINTS,
-        );
-        let y = Vec2D::linspread(
-            &Vec2D::new(0.0, -4.0),
-            &Vec2D::new(0.0, 4.0),
-            NPOINTS,
-        );
+        let x = Vec2D::linspread(&Vec2D::new(-4.0, 0.0), &Vec2D::new(4.0, 0.0), NPOINTS);
+        let y = Vec2D::linspread(&Vec2D::new(0.0, -4.0), &Vec2D::new(0.0, 4.0), NPOINTS);
         println!("{y:?}");
-        let p: Vec<Measurement> = y.iter().flat_map(|y|
-            x.iter().map(|x| Measurement::Phase{
-                line:Line::new(x.x, 0.0, y.y, 0.0)
-            })).collect();
+        let p: Vec<Measurement> = y
+            .iter()
+            .flat_map(|y| {
+                x.iter().map(|x| Measurement::Phase {
+                    line: Line::new(x.x, 0.0, y.y, 0.0),
+                })
+            })
+            .collect();
         let pup_vec = IMat::new(&p, &pup);
         let shape = [NPOINTS as usize, NPOINTS as usize];
         let data: Vec<f64> = pup_vec.flattened_array();
         let primary_hdu = fitrs::Hdu::new(&shape, data);
-        fitrs::Fits::create("/tmp/pup.fits", primary_hdu)
-        .expect("Failed to create");
+        fitrs::Fits::create("/tmp/pup.fits", primary_hdu).expect("Failed to create");
     }
 }
