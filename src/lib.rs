@@ -86,6 +86,8 @@ pub use utils::coupling_to_sigma;
 mod geometry;
 pub use crate::geometry::{Line, Vec2D, Vec3D};
 mod linalg;
+mod pair;
+pub use pair::Pair;
 pub use crate::linalg::Matrix;
 mod core;
 pub use crate::core::{CoSampleable, CovMat, IMat, Sampleable, Sampler};
@@ -146,6 +148,22 @@ pub enum Measurement {
         /// Altitude of target to raytrace through to.
         altitude: f64,
     },
+    SlopePairwise {
+        /// Principle axis of the WFS
+        central_line: Line,
+        /// Length of edges (e.g., subaperture height for x-slope measurement)
+        edge_length: f64,
+        /// Separation of edges (e.g., subaperture width for x-slope measurement)
+        edge_separation: f64,
+        /// Axis of gradient vector to sample, e.g., x-slope -> `Vec2D::new(1.0, 0.0)`
+        gradient_axis: Vec2D,
+        /// Number of points to sample along each edge (more points can be more accurate).
+        npoints: u32,
+        /// Altitude of target to raytrace through to.
+        altitude: f64,
+        /// Pupil function, to determine valid pixles.
+        pupil_mask: Pupil,
+    },
 }
 
 /// [Measurement] is the prototypical [Sampler] type.
@@ -184,27 +202,29 @@ impl Sampler for Measurement {
                 let point_a = edge_length * 0.5 * gradient_axis.ortho();
                 let point_b = -point_a.clone();
                 match *altitude {
-                    f64::INFINITY => Vec2D::linspread(&point_a, &point_b, *npoints)
-                        .iter()
-                        .flat_map(|p| {
-                            vec![
-                                (central_line + (p + &offset_vec), coeff),
-                                (central_line + (p - &offset_vec), -coeff),
-                            ]
-                        })
-                        .collect(),
-                    altitude => Vec2D::linspread(&point_a, &point_b, *npoints)
+                    f64::INFINITY => {
+                        Vec2D::linspread(&point_a, &point_b, *npoints) // get a span of points from running orthogonal to the measurement dimension
+                            .iter()
+                            .flat_map(|p| {
+                                vec![
+                                    (central_line + (p + &offset_vec), coeff),   // map each point to a pair of lines at either side of the subaperture
+                                    (central_line + (p - &offset_vec), -coeff),
+                                ]
+                            })
+                            .collect()
+                    }
+                    altitude => Vec2D::linspread(&point_a, &point_b, *npoints)  // get a span of points running orthogonal to the measurement dimension
                         .iter()
                         .flat_map(|p| {
                             let p_alt = Vec3D::new(
-                                central_line.xz * altitude,
+                                central_line.xz * altitude,  // get the position of the guide star in 3d coordinates
                                 central_line.yz * altitude,
                                 altitude,
                             );
                             vec![
                                 (
-                                    Line::new_from_two_points(
-                                        &((central_line + (p + &offset_vec))
+                                    Line::new_from_two_points(  // from the guide star position in 3d, and the 0.0 m position, 
+                                        &((central_line + (p + &offset_vec))  // get a pair of lines at either side of the subaperture.
                                             .position_at_altitude(0.0)
                                             + Vec3D::origin()),
                                         &p_alt,
@@ -223,6 +243,100 @@ impl Sampler for Measurement {
                             ]
                         })
                         .collect(),
+                }
+            }
+            Measurement::SlopePairwise {
+                central_line,
+                edge_length,
+                edge_separation,
+                gradient_axis,
+                npoints,
+                altitude,
+                pupil_mask,
+            } => {
+                let offset_vec = gradient_axis * edge_separation * 0.5;
+                let point_a = edge_length * 0.5 * gradient_axis.ortho();
+                let point_b = -point_a.clone();
+                match *altitude {
+                    f64::INFINITY =>
+                    // first, define the bearers, which will be used to support
+                    // the joists at each end. A (Line,Line) tuple in the bearer
+                    // vector defines two lines, between which a set of joists
+                    // will be fixed.
+                    {
+                        Vec2D::linspread(&point_a, &point_b, *npoints)
+                            .into_iter()
+                            .flat_map(|p| {
+                                let lines: Vec<Line> = Vec2D::linspread(
+                                    &(&p - &offset_vec),
+                                    &(&p + &offset_vec),
+                                    *npoints,
+                                )
+                                .into_iter()
+                                .map(|p| central_line + p)
+                                .filter(|p| pupil_mask.sample(p) > 0.5)
+                                .collect();
+                                let mut pairs =
+                                    Vec::<pair::Pair<Line>>::with_capacity(lines.len() - 1);
+                                for index in 0..lines.len() - 1 {
+                                    pairs.push(pair::Pair(&lines[index], &lines[index + 1]));
+                                }
+                                pairs = pair::Pair::reduce_pairs(pairs);
+                                pairs
+                                    .into_iter()
+                                    .flat_map(|pair| {
+                                        let coeff = 1.0
+                                            / pair.1.distance_at_ground(pair.0)
+                                            / *npoints as f64;
+                                        return vec![
+                                            (pair.1.clone(), coeff),
+                                            (pair.0.clone(), -coeff),
+                                        ];
+                                    })
+                                    .collect::<Vec<(Line, f64)>>()
+                            })
+                            .collect()
+                    }
+                    altitude => {
+                        Vec2D::linspread(&point_a, &point_b, *npoints)
+                            .into_iter()
+                            .flat_map(|p| {
+                                let p_alt = Vec3D::new(
+                                    central_line.xz * altitude,  // get the position of the guide star in 3d coordinates
+                                    central_line.yz * altitude,
+                                    altitude,
+                                );
+                                let lines: Vec<Line> = Vec2D::linspread(
+                                    &(&p - &offset_vec),
+                                    &(&p + &offset_vec),
+                                    *npoints,
+                                ).into_iter()
+                                .map(|p| Line::new_from_two_points(
+                                    &((central_line + p).position_at_altitude(0.0) + Vec3D::origin()),
+                                    &p_alt
+                                )).filter(|p| pupil_mask.sample(p) > 0.5)
+                                .collect();
+                                let mut pairs =
+                                    Vec::<pair::Pair<Line>>::with_capacity(lines.len() - 1);
+                                for index in 0..lines.len() - 1 {
+                                    pairs.push(pair::Pair(&lines[index], &lines[index + 1]));
+                                }
+                                pairs = pair::Pair::reduce_pairs(pairs);
+                                pairs
+                                    .into_iter()
+                                    .flat_map(|pair| {
+                                        let coeff = 1.0
+                                            / pair.1.distance_at_ground(pair.0)
+                                            / *npoints as f64;
+                                        return vec![
+                                            (pair.1.clone(), coeff),
+                                            (pair.0.clone(), -coeff),
+                                        ];
+                                    })
+                                    .collect::<Vec<(Line, f64)>>()
+                            })
+                            .collect()
+                    },
                 }
             }
         }
@@ -487,6 +601,80 @@ mod tests {
         ];
         let imat = IMat::new(&measurements, &actuators);
         assert_abs_diff_eq!(imat.eval(0, 0), imat.eval(1, 0), epsilon = 1e-10);
+    }
+
+    #[test]
+    fn slope_pairwise() {
+        let actuators = [Actuator::Gaussian {
+            sigma: coupling_to_sigma(0.5, 1.0),
+            position: Vec3D::origin(),
+            microns_per_volt: 1.0,
+        }];
+
+        let line = Line::new(1.0, 0.0, 0.0, 0.0);
+        let measurements = [
+            Measurement::SlopeTwoEdge {
+                central_line: line.clone(),
+                edge_length: 0.0,
+                edge_separation: 2e-2,
+                gradient_axis: Vec2D::x_unit(),
+                npoints: 100,
+                altitude: f64::INFINITY,
+            },
+            Measurement::SlopePairwise {
+                central_line: line,
+                edge_length: 0.0,
+                edge_separation: 2e-2,
+                gradient_axis: Vec2D::x_unit(),
+                npoints: 100,
+                altitude: f64::INFINITY,
+                pupil_mask: Pupil {
+                    rad_outer: 2.0,
+                    rad_inner: 0.0,
+                    spider_thickness: 0.0,
+                    spiders: vec![],
+                },
+            },
+        ];
+        let imat = IMat::new(&measurements, &actuators);
+        assert_abs_diff_eq!(imat.eval(0, 0), imat.eval(1, 0), epsilon = 1e-5);
+    }
+
+    #[test]
+    fn slope_pairwise_sodium() {
+        let actuators = [Actuator::Gaussian {
+            sigma: coupling_to_sigma(0.5, 1.0),
+            position: Vec3D::origin(),
+            microns_per_volt: 1.0,
+        }];
+
+        let line = Line::new(1.0, 0.0, 0.0, 0.0);
+        let measurements = [
+            Measurement::SlopeTwoEdge {
+                central_line: line.clone(),
+                edge_length: 0.0,
+                edge_separation: 2e-2,
+                gradient_axis: Vec2D::x_unit(),
+                npoints: 100,
+                altitude: 90e3,
+            },
+            Measurement::SlopePairwise {
+                central_line: line,
+                edge_length: 0.0,
+                edge_separation: 2e-2,
+                gradient_axis: Vec2D::x_unit(),
+                npoints: 100,
+                altitude: 90e3,
+                pupil_mask: Pupil {
+                    rad_outer: 2.0,
+                    rad_inner: 0.0,
+                    spider_thickness: 0.0,
+                    spiders: vec![],
+                },
+            },
+        ];
+        let imat = IMat::new(&measurements, &actuators);
+        assert_abs_diff_eq!(imat.eval(0, 0), imat.eval(1, 0), epsilon = 1e-5);
     }
 
     #[test]

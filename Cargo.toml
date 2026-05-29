@@ -10,6 +10,7 @@ keywords = ["adaptive_optics", "adaptive", "optics"]
 
 
 [dependencies]
+anyhow = "1.0.102"
 approx = "0.5.1"
 fitrs = "0.5.0"
 impl_ops = "0.1.1"
