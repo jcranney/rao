@@ -70,7 +70,7 @@ impl<'a, T: std::clone::Clone> Pair<'a, T> {
                 return Self::_recurse_pairs(Pair(pair.0, start_pair.1), input_pairs);
             }
         }
-        return start_pair;
+        start_pair
     }
 }
 

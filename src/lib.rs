@@ -288,10 +288,10 @@ impl Sampler for Measurement {
                                         let coeff = 1.0
                                             / pair.1.distance_at_ground(pair.0)
                                             / *npoints as f64;
-                                        return vec![
+                                        vec![
                                             (pair.1.clone(), coeff),
                                             (pair.0.clone(), -coeff),
-                                        ];
+                                        ]
                                     })
                                     .collect::<Vec<(Line, f64)>>()
                             })
@@ -328,10 +328,10 @@ impl Sampler for Measurement {
                                         let coeff = 1.0
                                             / pair.1.distance_at_ground(pair.0)
                                             / *npoints as f64;
-                                        return vec![
+                                        vec![
                                             (pair.1.clone(), coeff),
                                             (pair.0.clone(), -coeff),
-                                        ];
+                                        ]
                                     })
                                     .collect::<Vec<(Line, f64)>>()
                             })
