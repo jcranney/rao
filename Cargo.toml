@@ -10,7 +10,6 @@ keywords = ["adaptive_optics", "adaptive", "optics"]
 
 
 [dependencies]
-approx = "0.5.1"
 impl_ops = "0.1.1"
 rayon = "1.10.0"
 serde = { version = "1.0.229", features = ["derive"] }
@@ -22,3 +21,4 @@ maintenance = { status = "actively-developed" }
 
 [dev-dependencies]
 fitrs = "0.5.0"
+approx = "0.5.1"
