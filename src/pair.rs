@@ -1,8 +1,14 @@
-use anyhow::{Result, anyhow};
+use thiserror::Error;
 
 /// The `Pair` type is a tuple of borrowed variables of the same type.
 #[derive(Debug, Clone)]
 pub struct Pair<'a, T>(pub &'a T, pub &'a T);
+
+#[derive(Debug, Error)]
+pub enum PairCheckError {
+    #[error("multiple matches, not a safe set of pairs")]
+    AmbiguousPairs,
+}
 
 /// `Pair` implements a strict PartialEq based on the raw pointers of the
 /// underlying data. This is probably unnecessary, but I want to be completely
@@ -38,7 +44,7 @@ impl<'a, T: std::clone::Clone> Pair<'a, T> {
     /// is going to produce valid results when `reduce_pairs` is executed. This
     /// function is relatively slow, so if the user can guarantee that the input
     /// data is unambiguous, they should skip this step.
-    pub fn check_pairs(pairs: &[Self]) -> Result<()> {
+    pub fn check_pairs(pairs: &[Self]) -> Result<(), PairCheckError> {
         for (index_a, pair_a) in pairs.iter().enumerate() {
             let mut inner_matches: usize = 0;
             let mut outer_matches: usize = 0;
@@ -51,7 +57,7 @@ impl<'a, T: std::clone::Clone> Pair<'a, T> {
                 }
             }
             if inner_matches > 1 || outer_matches > 1 {
-                return Err(anyhow!("multiple matches, not a safe set of pairs"));
+                return Err(PairCheckError::AmbiguousPairs);
             }
         }
         Ok(())
