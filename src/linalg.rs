@@ -1,4 +1,4 @@
-use rayon::prelude::*;
+// use rayon::prelude::*;
 use std::fmt;
 
 /// Convenience trait to standardise interactions with "matrix-like" objects.
@@ -17,10 +17,10 @@ pub trait Matrix {
         Self: Sync,
     {
         (0..self.nrows())
-            .into_par_iter()
+            .into_iter()
             .map(move |row_index| {
                 (0..self.ncols())
-                    .into_par_iter()
+                    .into_iter()
                     .map(move |col_index| self.eval(row_index, col_index))
                     .collect::<Vec<f64>>()
             })
@@ -34,10 +34,10 @@ pub trait Matrix {
         Self: Sync,
     {
         (0..self.nrows())
-            .into_par_iter()
+            .into_iter()
             .map(|row_index| {
                 (0..self.ncols())
-                    .into_par_iter()
+                    .into_iter()
                     .map(|col_index| self.eval(row_index, col_index))
                     .collect::<Vec<f64>>()
             })
@@ -68,7 +68,7 @@ pub trait Matrix {
         Self: Sync,
     {
         indices
-            .into_par_iter()
+            .into_iter()
             .map(|(row_index, col_index)| self.eval(row_index, col_index))
             .collect()
     }
