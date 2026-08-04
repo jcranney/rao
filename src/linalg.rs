@@ -18,13 +18,12 @@ pub trait Matrix {
     {
         (0..self.nrows())
             .into_iter()
-            .map(move |row_index| {
+            .flat_map(move |row_index| {
                 (0..self.ncols())
                     .into_iter()
                     .map(move |col_index| self.eval(row_index, col_index))
                     .collect::<Vec<f64>>()
             })
-            .flatten()
             .collect()
     }
 
